@@ -1,2 +1,4 @@
 Flask
 gunicorn
+Werkzeug
+jinja2
