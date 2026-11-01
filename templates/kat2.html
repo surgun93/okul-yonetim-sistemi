@@ -1,1 +1,81 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kat 2 Yerleşim Planı</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .sinif-kutu {
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #fff;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .sinif-adi { font-size: 1.4rem; font-weight: bold; color: #2c3e50; }
+        .ders-bilgi { text-align: right; font-size: 1rem; color: #16a085; font-weight: 600; }
+        .koridor { background: #e9ecef; border-radius: 8px; padding: 40px 10px; text-align: center; font-weight: bold; color: #6c757d; margin: auto; }
+    </style>
+</head>
+<body class="bg-light">
 
+<div class="container mt-4">
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item"><a class="nav-link" href="/">Ana Sayfa</a></li>
+        <li class="nav-item"><a class="nav-link" href="/kat1">Kat 1</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/kat2">Kat 2</a></li>
+        <li class="nav-item"><a class="nav-link" href="/ayarlar">Ayarlar (Dosya Yükle)</a></li>
+    </ul>
+
+    <div class="card p-4 shadow-sm">
+        <h2 class="mb-4 text-center text-secondary">Kat 2 Planı ve Sınıf Dağılımı</h2>
+        
+        <div class="row align-items-center">
+            <!-- Sol Sınıflar -->
+            <div class="col-md-5">
+                {% if sol_liste %}
+                    {% for sinif in sol_liste %}
+                    <div class="sinif-kutu">
+                        <div class="sinif-adi">{{ sinif.orijinal_baslik }}</div>
+                        <div class="ders-bilgi">
+                            <a href="{{ url_for('static', filename='siniflar/' + sinif.resim) }}" target="_blank" class="btn btn-sm btn-outline-primary">Programı Gör</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted text-center">Sol tarafta tanımlı sınıf bulunamadı.</p>
+                {% endif %}
+            </div>
+
+            <!-- Orta Koridor Boşluğu -->
+            <div class="col-md-2 text-center d-none d-md-block">
+                <div class="koridor">KORİDOR</div>
+            </div>
+
+            <!-- Sağ Sınıflar -->
+            <div class="col-md-5">
+                {% if sag_liste %}
+                    {% for sinif in sag_liste %}
+                    <div class="sinif-kutu">
+                        <div class="ders-bilgi text-start">
+                            <a href="{{ url_for('static', filename='siniflar/' + sinif.resim) }}" target="_blank" class="btn btn-sm btn-outline-primary">Programı Gör</a>
+                        </div>
+                        <div class="sinif-adi">{{ sinif.orijinal_baslik }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted text-center">Sağ tarafta tanımlı sınıf bulunamadı.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
