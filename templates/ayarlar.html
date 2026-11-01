@@ -1,1 +1,92 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Ayarları - Dosya Yükleme</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
 
+<div class="container mt-4">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Üst Sekmeler -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item"><a class="nav-link" href="/">Ana Sayfa</a></li>
+        <li class="nav-item"><a class="nav-link" href="/kat1">Kat 1</a></li>
+        <li class="nav-item"><a class="nav-link" href="/kat2">Kat 2</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/ayarlar">Ayarlar (Dosya Yükle)</a></li>
+    </ul>
+
+    <div class="card p-4 shadow-sm">
+        <h4 class="mb-3">Program ve Nöbet Güncelleme Alanı</h4>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3 border-end">
+                <h5>Öğretmen Programı PDF Güncelle</h5>
+                <form action="/ayarlar" method="POST" enctype="multipart/form-data" class="d-flex gap-2 mt-2">
+                    <input type="file" name="ogretmen_pdf_dosyasi" class="form-control" accept=".pdf" required>
+                    <button type="submit" class="btn btn-outline-primary">Kaydet</button>
+                </form>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <h5>Sınıf Programı PDF Güncelle</h5>
+                <form action="/ayarlar" method="POST" enctype="multipart/form-data" class="d-flex gap-2 mt-2">
+                    <input type="file" name="sinif_pdf_dosyasi" class="form-control" accept=".pdf" required>
+                    <button type="submit" class="btn btn-outline-success">Kaydet</button>
+                </form>
+            </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="row">
+            <div class="col-md-6 mb-3 border-end">
+                <h5>Pansiyon Nöbet Güncelle (PDF/JPG/PNG)</h5>
+                <form action="/ayarlar" method="POST" enctype="multipart/form-data" class="d-flex gap-2 mt-2">
+                    <input type="file" name="pansiyon_pdf_dosyasi" class="form-control" accept=".pdf, .jpg, .jpeg, .png" required>
+                    <button type="submit" class="btn btn-outline-warning text-dark">Kaydet</button>
+                </form>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <h5>Nöbetçi Öğretmen Güncelle (PDF/JPG/PNG)</h5>
+                <form action="/ayarlar" method="POST" enctype="multipart/form-data" class="d-flex gap-2 mt-2">
+                    <input type="file" name="nobetci_ogretmen_dosyasi" class="form-control" accept=".pdf, .jpg, .jpeg, .png" required>
+                    <button type="submit" class="btn btn-outline-info text-dark">Kaydet</button>
+                </form>
+            </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="row">
+            <!-- Sınıf Rehber Öğretmenleri Yükleme Alanı -->
+            <div class="col-md-6 mb-3">
+                <h5>Sınıf Rehber Öğretmenleri Güncelle (PDF/JPG/PNG)</h5>
+                <form action="/ayarlar" method="POST" enctype="multipart/form-data" class="d-flex gap-2 mt-2">
+                    <input type="file" name="rehber_ogretmen_dosyasi" class="form-control" accept=".pdf, .jpg, .jpeg, .png" required>
+                    <button type="submit" class="btn btn-outline-secondary text-dark">Kaydet</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
