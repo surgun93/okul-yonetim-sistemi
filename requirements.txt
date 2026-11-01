@@ -2,3 +2,4 @@ Flask
 gunicorn
 Werkzeug
 jinja2
+PyMuPDF
