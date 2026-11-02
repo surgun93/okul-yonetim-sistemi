@@ -6,11 +6,20 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
         .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        .menu { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 20px; }
-        .menu form { display: inline-block; }
-        .menu button, .menu a { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; }
-        .menu button:hover, .menu a:hover { background-color: #0056b3; }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        
+        /* Sekme Tarzı Üst Menü (Resim 2 stili) */
+        .top-nav { display: flex; justify-content: center; gap: 15px; border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; }
+        .top-nav a, .top-nav span { padding: 8px 16px; text-decoration: none; color: #007bff; font-weight: bold; border-radius: 4px 4px 0 0; }
+        .top-nav a:hover { background-color: #e9ecef; }
+        .top-nav .active { background-color: #fff; border: 1px solid #ddd; border-bottom: 2px solid #fff; color: #333; margin-bottom: -12px; }
+
+        /* Alt Buton Grubu (Pansiyon, Nöbet, Rehber vb.) */
+        .sub-menu { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 25px; background: #f8f9fa; padding: 12px; border-radius: 6px; }
+        .sub-menu form { display: inline-block; }
+        .sub-menu button { padding: 8px 14px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .sub-menu button:hover { opacity: 0.9; }
+
         .search-section { display: flex; justify-content: space-around; margin-bottom: 20px; background: #e9ecef; padding: 15px; border-radius: 6px; }
         .search-box { display: flex; gap: 5px; }
         .content-area { text-align: center; margin-top: 20px; }
@@ -22,7 +31,7 @@
     <div class="container">
         <h1>Çamaş Türk Telekom Çok Programlı Anadolu Lisesi</h1>
         
-        <!-- Flaş Mesajlar (Blok kapanışları düzeltildi) -->
+        <!-- Flaş Mesajlar -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
@@ -31,10 +40,16 @@
           {% endif %}
         {% endwith %}
 
-        <!-- Üst Menü Butonları -->
-        <div class="menu">
-            <a href="{{ url_for('index') }}">Ana Sayfa</a>
-            
+        <!-- Üst Sekme Menüsü (Resim 2 formatı) -->
+        <div class="top-nav">
+            <a href="{{ url_for('index') }}" class="active">Ana Sayfa</a>
+            <a href="{{ url_for('kat1') }}">1. Kat</a>
+            <a href="{{ url_for('kat2') }}">2. Kat</a>
+            <a href="{{ url_for('ayarlar') }}">Ayarlar (Dosya Yükle)</a>
+        </div>
+
+        <!-- Alt Özel Butonlar (Pansiyon, Nöbetçi, Rehber, Kulüp, Sınav) -->
+        <div class="sub-menu">
             <form method="POST">
                 <button type="submit" name="pansiyon_goster" value="1">Pansiyon Nöbet</button>
             </form>
@@ -54,10 +69,6 @@
             <form method="POST">
                 <button type="submit" name="sinav_goster" value="1" style="background-color: #17a2b8;">Sınav Programı</button>
             </form>
-
-            <a href="{{ url_for('kat1') }}">1. Kat Sınıflar</a>
-            <a href="{{ url_for('kat2') }}">2. Kat Sınıflar</a>
-            <a href="{{ url_for('ayarlar') }}" style="background-color: #6c757d;">Ayarlar / Dosya Yükle</a>
         </div>
 
         <!-- Arama Alanları -->
