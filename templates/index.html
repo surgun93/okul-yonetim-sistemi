@@ -5,26 +5,32 @@
     <title>Okul Yönetim ve Program Sistemi</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
-        .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 25px; font-size: 26px; }
         
-        /* Sekme Tarzı Üst Menü (Resim 2 stili) */
-        .top-nav { display: flex; justify-content: center; gap: 15px; border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; }
-        .top-nav a, .top-nav span { padding: 8px 16px; text-decoration: none; color: #007bff; font-weight: bold; border-radius: 4px 4px 0 0; }
+        /* Üst Sekme Menüsü (Boyutlar Büyütüldü) */
+        .top-nav { display: flex; justify-content: center; gap: 20px; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 20px; }
+        .top-nav a, .top-nav span { padding: 10px 20px; text-decoration: none; color: #007bff; font-weight: bold; font-size: 16px; border-radius: 6px 6px 0 0; }
         .top-nav a:hover { background-color: #e9ecef; }
-        .top-nav .active { background-color: #fff; border: 1px solid #ddd; border-bottom: 2px solid #fff; color: #333; margin-bottom: -12px; }
+        .top-nav .active { background-color: #fff; border: 1px solid #ddd; border-bottom: 2px solid #fff; color: #333; margin-bottom: -14px; font-size: 17px; }
 
-        /* Alt Buton Grubu (Pansiyon, Nöbet, Rehber vb.) */
-        .sub-menu { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 25px; background: #f8f9fa; padding: 12px; border-radius: 6px; }
+        /* Alt Özel Butonlar (Boyutlar ve Yazılar Büyütüldü) */
+        .sub-menu { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 6px; }
         .sub-menu form { display: inline-block; }
-        .sub-menu button { padding: 8px 14px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .sub-menu button { padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; }
         .sub-menu button:hover { opacity: 0.9; }
 
-        .search-section { display: flex; justify-content: space-around; margin-bottom: 20px; background: #e9ecef; padding: 15px; border-radius: 6px; }
-        .search-box { display: flex; gap: 5px; }
+        /* Arama Alanları (Yazı ve Input Boyutları Büyütüldü) */
+        .search-section { display: flex; justify-content: space-around; margin-bottom: 25px; background: #e9ecef; padding: 20px; border-radius: 6px; }
+        .search-box { display: flex; gap: 10px; align-items: center; }
+        .search-box input[type="text"] { padding: 10px 14px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; width: 220px; }
+        .search-box button { padding: 10px 16px; font-size: 15px; font-weight: bold; background-color: #343a40; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .search-box button:hover { background-color: #23272b; }
+
         .content-area { text-align: center; margin-top: 20px; }
+        .content-area h3 { font-size: 20px; color: #444; }
         .content-area img { max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
-        .alert { background-color: #ffc107; color: #333; padding: 10px; border-radius: 4px; margin-bottom: 15px; text-align: center; }
+        .alert { background-color: #ffc107; color: #333; padding: 12px; border-radius: 4px; margin-bottom: 15px; text-align: center; font-size: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -40,7 +46,7 @@
           {% endif %}
         {% endwith %}
 
-        <!-- Üst Sekme Menüsü (Resim 2 formatı) -->
+        <!-- Üst Sekme Menüsü -->
         <div class="top-nav">
             <a href="{{ url_for('index') }}" class="active">Ana Sayfa</a>
             <a href="{{ url_for('kat1') }}">1. Kat</a>
@@ -90,7 +96,7 @@
                 <h3>İstenen Program / Liste</h3>
                 <img src="{{ url_for('static', filename=secilen_resim) }}" alt="Program Resmi">
             {% else %}
-                <p>Lütfen yukarıdan bir liste seçin ya da öğretmen/sınıf araması yapın.</p>
+                <p style="font-size: 16px; color: #666;">Lütfen yukarıdan bir liste seçin ya da öğretmen/sınıf araması yapın.</p>
             {% endif %}
         </div>
     </div>
