@@ -5,7 +5,7 @@ import fitz  # PyMuPDF kütüphanesi
 app = Flask(__name__)
 app.secret_key = "gizli_anahtar_guvenlik_icin"
 
-# Dosya isimleri static klasörü içinde belirttiğiniz gibi ayarlandı
+# Dosya isimleri static klasörü içinde ayarlandı
 OGRETMEN_PDF = os.path.join("static", "ogretmen_programi.pdf")
 SINIF_PDF = os.path.join("static", "sinif_programi.pdf")
 
@@ -136,6 +136,8 @@ def index():
     pansiyon_tiklandi = request.form.get("pansiyon_goster")
     nobetci_tiklandi = request.form.get("nobetci_goster")
     rehber_tiklandi = request.form.get("rehber_goster")
+    klup_tiklandi = request.form.get("klup_goster")  # Yeni Kulüp butonu
+    sinav_tiklandi = request.form.get("sinav_goster")  # Yeni Sınav Programı butonu
 
     if pansiyon_tiklandi is not None:
       pansiyon_yolu = os.path.join("static", "pansiyon_nobet.png")
@@ -157,6 +159,20 @@ def index():
         secilen_resim = "rehber_ogretmenler.png"
       else:
         flash("Henüz sınıf rehber öğretmenleri listesi yüklenmemiş!", "warning")
+
+    elif klup_tiklandi is not None:  # Kulüp öğretmenleri göster
+      klup_yolu = os.path.join("static", "klup_ogretmenleri.png")
+      if os.path.exists(klup_yolu):
+        secilen_resim = "klup_ogretmenleri.png"
+      else:
+        flash("Henüz kulüp öğretmenleri listesi yüklenmemiş!", "warning")
+
+    elif sinav_tiklandi is not None:  # Sınav programı göster
+      sinav_yolu = os.path.join("static", "sinav_programi.png")
+      if os.path.exists(sinav_yolu):
+        secilen_resim = "sinav_programi.png"
+      else:
+        flash("Henüz sınav programı yüklenmemiş!", "warning")
 
     elif ogretmen_input is not None:
       ogretmen_arama = ogretmen_input.strip()
@@ -310,6 +326,46 @@ def ayarlar():
         elif uzanti in ["jpg", "jpeg", "png"]:
           file.save(hedef_resim_yolu)
         flash("Sınıf rehber öğretmenleri listesi güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
+    # Kulüp Öğretmenleri Dosya Yükleme (PDF veya JPG/PNG)
+    if "klup_ogretmen_dosyasi" in request.files:
+      file = request.files["klup_ogretmen_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "klup_ogretmenleri.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_klup.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Kulüp öğretmenleri listesi güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
+    # Sınav Programı Dosya Yükleme (PDF veya JPG/PNG)
+    if "sinav_programi_dosyasi" in request.files:
+      file = request.files["sinav_programi_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "sinav_programi.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_sinav.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Sınav programı güncellendi!", "success")
       return redirect(url_for("ayarlar"))
 
   return render_template("ayarlar.html")
