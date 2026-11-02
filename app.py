@@ -136,8 +136,8 @@ def index():
     pansiyon_tiklandi = request.form.get("pansiyon_goster")
     nobetci_tiklandi = request.form.get("nobetci_goster")
     rehber_tiklandi = request.form.get("rehber_goster")
-    klup_tiklandi = request.form.get("klup_goster")  # Yeni Kulüp butonu
-    sinav_tiklandi = request.form.get("sinav_goster")  # Yeni Sınav Programı butonu
+    klup_tiklandi = request.form.get("klup_goster")
+    sinav_tiklandi = request.form.get("sinav_goster")
 
     if pansiyon_tiklandi is not None:
       pansiyon_yolu = os.path.join("static", "pansiyon_nobet.png")
@@ -160,14 +160,14 @@ def index():
       else:
         flash("Henüz sınıf rehber öğretmenleri listesi yüklenmemiş!", "warning")
 
-    elif klup_tiklandi is not None:  # Kulüp öğretmenleri göster
+    elif klup_tiklandi is not None:
       klup_yolu = os.path.join("static", "klup_ogretmenleri.png")
       if os.path.exists(klup_yolu):
         secilen_resim = "klup_ogretmenleri.png"
       else:
         flash("Henüz kulüp öğretmenleri listesi yüklenmemiş!", "warning")
 
-    elif sinav_tiklandi is not None:  # Sınav programı göster
+    elif sinav_tiklandi is not None:
       sinav_yolu = os.path.join("static", "sinav_programi.png")
       if os.path.exists(sinav_yolu):
         secilen_resim = "sinav_programi.png"
@@ -212,12 +212,12 @@ def index():
 def sinif_bilgisi_getir(hedef_ad):
   hedef_temiz = sinif_temizle(hedef_ad)
   for item in sinif_listesi:
-    if item["baslik"] == hedef_temiz or item["baslik"].replace(
-        " ", ""
-    ) == hedef_temiz.replace(" ", ""):
-      return item
-  for item in sinif_listesi:
-    if hedef_temiz in item["baslik"]:
+    if (
+        item["baslik"] == hedef_temiz
+        or item["baslik"].replace(" ", "") == hedef_temiz.replace(" ", "")
+        or hedef_temiz in item["baslik"]
+        or item["baslik"] in hedef_temiz
+    ):
       return item
   return None
 
@@ -328,7 +328,6 @@ def ayarlar():
         flash("Sınıf rehber öğretmenleri listesi güncellendi!", "success")
       return redirect(url_for("ayarlar"))
 
-    # Kulüp Öğretmenleri Dosya Yükleme (PDF veya JPG/PNG)
     if "klup_ogretmen_dosyasi" in request.files:
       file = request.files["klup_ogretmen_dosyasi"]
       if file and file.filename != "":
@@ -348,7 +347,6 @@ def ayarlar():
         flash("Kulüp öğretmenleri listesi güncellendi!", "success")
       return redirect(url_for("ayarlar"))
 
-    # Sınav Programı Dosya Yükleme (PDF veya JPG/PNG)
     if "sinav_programi_dosyasi" in request.files:
       file = request.files["sinav_programi_dosyasi"]
       if file and file.filename != "":
@@ -372,4 +370,4 @@ def ayarlar():
 
 
 if __name__ == "__main__":
-  app.run(debug=True)
+  app.run(debug=True, use_reloader=False)
