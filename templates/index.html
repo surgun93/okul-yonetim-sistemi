@@ -22,16 +22,16 @@
     <div class="container">
         <h1>Çamaş Türk Telekom Çok Programlı Anadolu Lisesi</h1>
         
-        <!-- Flaş Mesajlar -->
+        <!-- Flaş Mesajlar (Blok kapanışları düzeltildi) -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
               <div class="alert">{{ message }}</div>
             {% endfor %}
-          %}
+          {% endif %}
         {% endwith %}
 
-        <!-- Üst Menü Butonları (Pansiyon, Nöbet, Rehber, Kulüp, Sınav ve Ayarlar) -->
+        <!-- Üst Menü Butonları -->
         <div class="menu">
             <a href="{{ url_for('index') }}">Ana Sayfa</a>
             
@@ -47,12 +47,10 @@
                 <button type="submit" name="rehber_goster" value="1">Rehber Öğretmenler</button>
             </form>
 
-            <!-- Yeni Eklenen Kulüp Öğretmenleri Butonu -->
             <form method="POST">
                 <button type="submit" name="klup_goster" value="1" style="background-color: #28a745;">Kulüp Öğretmenleri</button>
             </form>
 
-            <!-- Yeni Eklenen Sınav Programı Butonu -->
             <form method="POST">
                 <button type="submit" name="sinav_goster" value="1" style="background-color: #17a2b8;">Sınav Programı</button>
             </form>
