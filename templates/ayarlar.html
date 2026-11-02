@@ -22,13 +22,13 @@
         <a href="{{ url_for('index') }}" class="back-btn">← Ana Sayfaya Dön</a>
         <h1>Sistem Ayarları ve Dosya Yükleme Paneli</h1>
 
-        <!-- Flaş Mesajlar -->
+        <!-- Flaş Mesajlar (Blok kapanışları düzeltildi) -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
               <div class="alert">{{ message }}</div>
             {% endfor %}
-          %}
+          {% endif %}
         {% endwith %}
 
         <!-- 1. Öğretmen Programı Yükleme -->
@@ -76,7 +76,7 @@
             </form>
         </div>
 
-        <!-- 6. Yeni: Kulüp Öğretmenleri Listesi Yükleme -->
+        <!-- 6. Kulüp Öğretmenleri Listesi Yükleme -->
         <div class="form-group">
             <form method="POST" enctype="multipart/form-data">
                 <label>Kulüp Öğretmenleri Listesi (PDF, JPG, PNG)</label>
@@ -85,7 +85,7 @@
             </form>
         </div>
 
-        <!-- 7. Yeni: Sınav Programı Yükleme -->
+        <!-- 7. Sınav Programı Yükleme -->
         <div class="form-group">
             <form method="POST" enctype="multipart/form-data">
                 <label>Sınav Programı (PDF, JPG, PNG)</label>
