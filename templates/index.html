@@ -54,7 +54,7 @@
             <a href="{{ url_for('ayarlar') }}">Ayarlar (Dosya Yükle)</a>
         </div>
 
-        <!-- Alt Özel Butonlar (Pansiyon, Nöbetçi, Rehber, Kulüp, Sınav) -->
+        <!-- Alt Özel Butonlar -->
         <div class="sub-menu">
             <form method="POST">
                 <button type="submit" name="pansiyon_goster" value="1">Pansiyon Nöbet</button>
@@ -74,6 +74,14 @@
 
             <form method="POST">
                 <button type="submit" name="sinav_goster" value="1" style="background-color: #17a2b8;">Sınav Programı</button>
+            </form>
+
+            <form method="POST">
+                <button type="submit" name="blok_goster" value="1" style="background-color: #6c757d;">Blok Saatler</button>
+            </form>
+
+            <form method="POST">
+                <button type="submit" name="imamhatip_goster" value="1" style="background-color: #fd7e14;">İmamhatip Saatler</button>
             </form>
         </div>
 
