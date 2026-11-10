@@ -138,6 +138,8 @@ def index():
     rehber_tiklandi = request.form.get("rehber_goster")
     klup_tiklandi = request.form.get("klup_goster")
     sinav_tiklandi = request.form.get("sinav_goster")
+    blok_tiklandi = request.form.get("blok_goster")
+    imamhatip_tiklandi = request.form.get("imamhatip_goster")
 
     if pansiyon_tiklandi is not None:
       pansiyon_yolu = os.path.join("static", "pansiyon_nobet.png")
@@ -173,6 +175,20 @@ def index():
         secilen_resim = "sinav_programi.png"
       else:
         flash("Henüz sınav programı yüklenmemiş!", "warning")
+
+    elif blok_tiklandi is not None:
+      blok_yolu = os.path.join("static", "blok_saatler.png")
+      if os.path.exists(blok_yolu):
+        secilen_resim = "blok_saatler.png"
+      else:
+        flash("Henüz blok saatler listesi yüklenmemiş!", "warning")
+
+    elif imamhatip_tiklandi is not None:
+      imamhatip_yolu = os.path.join("static", "imamhatip_saatler.png")
+      if os.path.exists(imamhatip_yolu):
+        secilen_resim = "imamhatip_saatler.png"
+      else:
+        flash("Henüz imamhatip saatler listesi yüklenmemiş!", "warning")
 
     elif ogretmen_input is not None:
       ogretmen_arama = ogretmen_input.strip()
