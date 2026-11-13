@@ -142,6 +142,7 @@ def index():
     imamhatip_tiklandi = request.form.get("imamhatip_goster")
     ogrenci_sayilari_tiklandi = request.form.get("ogrenci_sayilari_goster")
     calisma_takvimi_tiklandi = request.form.get("calisma_takvimi_goster")
+    calisma_takvimi1_tiklandi = request.form.get("calisma_takvimi1_goster")
 
     if pansiyon_tiklandi is not None:
       pansiyon_yolu = os.path.join("static", "pansiyon_nobet.png")
@@ -205,6 +206,13 @@ def index():
         secilen_resim = "calisma_takvimi.png"
       else:
         flash("Henüz çalışma takvimi yüklenmemiş!", "warning")
+
+    elif calisma_takvimi1_tiklandi is not None:
+      takvim1_yolu = os.path.join("static", "calisma_takvimi1.png")
+      if os.path.exists(takvim1_yolu):
+        secilen_resim = "calisma_takvimi1.png"
+      else:
+        flash("Henüz Çalışma Takvimi 1 yüklenmemiş!", "warning")
 
     elif ogretmen_input is not None:
       ogretmen_arama = ogretmen_input.strip()
