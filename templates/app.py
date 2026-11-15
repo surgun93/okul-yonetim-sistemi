@@ -1,0 +1,646 @@
+import datetime
+import os
+import sqlite3
+from flask import Flask, flash, g, redirect, render_template, request, url_for
+import fitz  # PyMuPDF kütüphanesi
+
+app = Flask(__name__)
+app.secret_key = "gizli_anahtar_guvenlik_icin"
+
+# Veritabanı dosyası
+DATABASE = "sinif.db"
+
+
+def get_db():
+  db = getattr(g, "_database", None)
+  if db is None:
+    db = g._database = sqlite3.connect(DATABASE)
+    db.row_factory = sqlite3.Row
+  return db
+
+
+@app.teardown_appcontext
+def close_connection(exception):
+  db = getattr(g, "_database", None)
+  if db is not None:
+    db.close()
+
+
+def init_db():
+  with app.app_context():
+    db = get_db()
+    db.execute("""
+            CREATE TABLE IF NOT EXISTS siniflar (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ad TEXT UNIQUE NOT NULL
+            )
+        """)
+    db.execute("""
+            CREATE TABLE IF NOT EXISTS ders_programi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sinif_id INTEGER,
+                gun TEXT,
+                saat INTEGER,
+                ders_adi TEXT,
+                FOREIGN KEY (sinif_id) REFERENCES siniflar(id) ON DELETE CASCADE
+            )
+        """)
+    db.execute("""
+            CREATE TABLE IF NOT EXISTS ders_saatleri (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ders_sirasi INTEGER,
+                giris_saati TEXT,
+                cikis_saati TEXT
+            )
+        """)
+    db.commit()
+
+
+init_db()
+
+OGRETMEN_PDF = os.path.join("static", "ogretmen_programi.pdf")
+SINIF_PDF = os.path.join("static", "sinif_programi.pdf")
+
+OGRETMEN_KLASORU = "static/ogretmenler"
+SINIF_KLASORU = "static/siniflar"
+
+os.makedirs(OGRETMEN_KLASORU, exist_ok=True)
+os.makedirs(SINIF_KLASORU, exist_ok=True)
+
+
+def ogretmen_temizle(metin):
+  if not metin:
+    return ""
+  return (
+      metin.replace("İ", "i")
+      .replace("I", "ı")
+      .replace("Ş", "ş")
+      .replace("Ğ", "ğ")
+      .replace("Ü", "ü")
+      .replace("Ö", "ö")
+      .replace("Ç", "ç")
+      .lower()
+  )
+
+
+def sinif_temizle(metin):
+  if not metin:
+    return ""
+  temiz = ogretmen_temizle(metin)
+  return (
+      temiz.replace(" ", "")
+      .replace("-", "")
+      .replace("/", "")
+      .replace(":", "")
+      .replace(".", "")
+  )
+
+
+def ogretmen_pdf_isle(pdf_yolu, hedef_klasor):
+  listesi = []
+  if not os.path.exists(pdf_yolu):
+    return listesi
+  doc = fitz.open(pdf_yolu)
+  for sayfa_no in range(len(doc)):
+    page = doc[sayfa_no]
+    text = page.get_text()
+    pix = page.get_pixmap(dpi=150)
+    resim_adi = f"sayfa_{sayfa_no}.png"
+    pix.save(os.path.join(hedef_klasor, resim_adi))
+    listesi.append({"metin": ogretmen_temizle(text), "resim": resim_adi})
+  return listesi
+
+
+def sinif_pdf_isle(pdf_yolu, hedef_klasor):
+  sinif_listesi = []
+  ham_siniflar = []
+  if not os.path.exists(pdf_yolu):
+    return sinif_listesi, ham_siniflar
+
+  doc = fitz.open(pdf_yolu)
+  for sayfa_no in range(len(doc)):
+    page = doc[sayfa_no]
+    text = page.get_text()
+    pix = page.get_pixmap(dpi=150)
+    resim_adi = f"sayfa_{sayfa_no}.png"
+    pix.save(os.path.join(hedef_klasor, resim_adi))
+
+    satirlar = text.split("\n")
+    sinif_adi = ""
+
+    for satir in satirlar:
+      s = satir.strip().lstrip(":").strip()
+      s_kucuk = s.lower()
+      if not s or len(s) > 25:
+        continue
+      if any(
+          kelime in s_kucuk
+          for kelime in [
+              "t.c.",
+              "kaymakamliği",
+              "valiliği",
+              "müdürlüğü",
+              "lisesi",
+              "ortaokulu",
+              "ders",
+              "programı",
+              "gün",
+          ]
+      ):
+        continue
+      if any(c.isdigit() for c in s):
+        sinif_adi = s
+        break
+
+    if not sinif_adi:
+      sinif_adi = f"Sayfa {sayfa_no+1}"
+
+    ham_siniflar.append(sinif_adi)
+    sinif_listesi.append({
+        "baslik": sinif_temizle(sinif_adi),
+        "orijinal_baslik": sinif_adi,
+        "resim": resim_adi,
+        "tum_metin": sinif_temizle(text),
+    })
+
+  return sinif_listesi, sorted(list(set(ham_siniflar)))
+
+
+ogretmen_listesi = ogretmen_pdf_isle(OGRETMEN_PDF, OGRETMEN_KLASORU)
+sinif_listesi, sinif_isimleri = sinif_pdf_isle(SINIF_PDF, SINIF_KLASORU)
+
+KAT1_SOL = ["12ÇGL", "10Yih", "9Yih"]
+KAT1_SAG = ["11yih", "10a", "9a"]
+KAT2_SOL = ["12a", "11a"]
+KAT2_SAG = []
+
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+  global ogretmen_listesi, sinif_listesi, sinif_isimleri
+  secilen_resim = None
+  ogretmen_arama = ""
+  sinif_arama = ""
+
+  if request.method == "POST":
+    ogretmen_input = request.form.get("ogretmen")
+    sinif_input = request.form.get("sinif")
+    pansiyon_tiklandi = request.form.get("pansiyon_goster")
+    nobetci_tiklandi = request.form.get("nobetci_goster")
+    rehber_tiklandi = request.form.get("rehber_goster")
+    klup_tiklandi = request.form.get("klup_goster")
+    sinav_tiklandi = request.form.get("sinav_goster")
+    blok_tiklandi = request.form.get("blok_goster")
+    imamhatip_tiklandi = request.form.get("imamhatip_goster")
+    ogrenci_sayilari_tiklandi = request.form.get("ogrenci_sayilari_goster")
+    calisma_takvimi_tiklandi = request.form.get("calisma_takvimi_goster")
+    calisma_takvimi1_tiklandi = request.form.get("calisma_takvimi1_goster")
+
+    if pansiyon_tiklandi is not None:
+      pansiyon_yolu = os.path.join("static", "pansiyon_nobet.png")
+      if os.path.exists(pansiyon_yolu):
+        secilen_resim = "pansiyon_nobet.png"
+      else:
+        flash("Henüz pansiyon nöbet listesi yüklenmemiş!", "warning")
+
+    elif nobetci_tiklandi is not None:
+      nobetci_yolu = os.path.join("static", "nobetci_ogretmen.png")
+      if os.path.exists(nobetci_yolu):
+        secilen_resim = "nobetci_ogretmen.png"
+      else:
+        flash("Henüz nöbetçi öğretmen listesi yüklenmemiş!", "warning")
+
+    elif rehber_tiklandi is not None:
+      rehber_yolu = os.path.join("static", "rehber_ogretmenler.png")
+      if os.path.exists(rehber_yolu):
+        secilen_resim = "rehber_ogretmenler.png"
+      else:
+        flash("Henüz sınıf rehber öğretmenleri listesi yüklenmemiş!", "warning")
+
+    elif klup_tiklandi is not None:
+      klup_yolu = os.path.join("static", "klup_ogretmenleri.png")
+      if os.path.exists(klup_yolu):
+        secilen_resim = "klup_ogretmenleri.png"
+      else:
+        flash("Henüz kulüp öğretmenleri listesi yüklenmemiş!", "warning")
+
+    elif sinav_tiklandi is not None:
+      sinav_yolu = os.path.join("static", "sinav_programi.png")
+      if os.path.exists(sinav_yolu):
+        secilen_resim = "sinav_programi.png"
+      else:
+        flash("Henüz sınav programı yüklenmemiş!", "warning")
+
+    elif blok_tiklandi is not None:
+      blok_yolu = os.path.join("static", "blok_saatler.png")
+      if os.path.exists(blok_yolu):
+        secilen_resim = "blok_saatler.png"
+      else:
+        flash("Henüz blok saatler listesi yüklenmemiş!", "warning")
+
+    elif imamhatip_tiklandi is not None:
+      imamhatip_yolu = os.path.join("static", "imamhatip_saatler.png")
+      if os.path.exists(imamhatip_yolu):
+        secilen_resim = "imamhatip_saatler.png"
+      else:
+        flash("Henüz imamhatip saatler listesi yüklenmemiş!", "warning")
+
+    elif ogrenci_sayilari_tiklandi is not None:
+      ogrenci_yolu = os.path.join("static", "ogrenci_sayilari.png")
+      if os.path.exists(ogrenci_yolu):
+        secilen_resim = "ogrenci_sayilari.png"
+      else:
+        flash("Henüz öğrenci sayıları listesi yüklenmemiş!", "warning")
+
+    elif calisma_takvimi_tiklandi is not None:
+      takvim_yolu = os.path.join("static", "calisma_takvimi.png")
+      if os.path.exists(takvim_yolu):
+        secilen_resim = "calisma_takvimi.png"
+      else:
+        flash("Henüz çalışma takvimi yüklenmemiş!", "warning")
+
+    elif calisma_takvimi1_tiklandi is not None:
+      takvim1_yolu = os.path.join("static", "calisma_takvimi1.png")
+      if os.path.exists(takvim1_yolu):
+        secilen_resim = "calisma_takvimi1.png"
+      else:
+        flash("Henüz Çalışma Takvimi 1 yüklenmemiş!", "warning")
+
+    elif ogretmen_input is not None:
+      ogretmen_arama = ogretmen_input.strip()
+      if ogretmen_arama:
+        arama = ogretmen_temizle(ogretmen_arama)
+        if "edip" in arama:
+          secilen_resim = "ogretmenler/sayfa_1.png"
+        else:
+          for item in ogretmen_listesi:
+            if arama in item["metin"]:
+              secilen_resim = f"ogretmenler/{item['resim']}"
+              break
+
+    elif sinif_input is not None:
+      sinif_arama = sinif_input.strip()
+      if sinif_arama:
+        arama = sinif_temizle(sinif_arama)
+        for item in sinif_listesi:
+          if arama == item["baslik"] or arama == item["baslik"].replace(
+              " ", ""
+          ):
+            secilen_resim = f"siniflar/{item['resim']}"
+            break
+        if not secilen_resim:
+          for item in sinif_listesi:
+            if arama in item["baslik"]:
+              secilen_resim = f"siniflar/{item['resim']}"
+              break
+
+  return render_template(
+      "index.html",
+      secilen_resim=secilen_resim,
+      ogretmen_arama=ogretmen_arama,
+      sinif_arama=sinif_arama,
+      sinif_isimleri=sinif_isimleri,
+  )
+
+
+def sinif_bilgisi_getir(hedef_ad, db):
+  hedef_temiz_str = sinif_temizle(hedef_ad)
+  bulunan_pdf_item = None
+  for item in sinif_listesi:
+    if (
+        item["baslik"] == hedef_temiz_str
+        or item["baslik"].replace(" ", "") == hedef_temiz_str.replace(" ", "")
+        or hedef_temiz_str in item["baslik"]
+        or item["baslik"] in hedef_temiz_str
+    ):
+      bulunan_pdf_item = item
+      break
+
+  anlik_ders, _ = guncel_ders_bilgisi_ve_durum(hedef_ad, db)
+
+  if bulunan_pdf_item:
+    kopya_item = dict(bulunan_pdf_item)
+    kopya_item["anlik_ders"] = anlik_ders
+    return kopya_item
+  else:
+    return {
+        "orijinal_baslik": hedef_ad,
+        "resim": "",
+        "anlik_ders": anlik_ders,
+    }
+
+
+def zaman_dakika_farki(saat_str1, saat_str2):
+  # "HH:MM" formatındaki iki saat arasındaki dakika farkını döndürür (saat2 - saat1)
+  h1, m1 = map(int, saat_str1.split(":"))
+  h2, m2 = map(int, saat_str2.split(":"))
+  return (h2 * 60 + m2) - (h1 * 60 + m1)
+
+
+def genel_okul_durumu_getir(db):
+  simdi = datetime.datetime.now()
+  simdi_time = simdi.strftime("%H:%M")
+
+  saatler = db.execute(
+      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
+  ).fetchall()
+  if not saatler:
+    return {
+        "mesaj": "Ders Saatleri Tanımlı Değil",
+        "tip": "tenefus",
+    }
+
+  # Ders saatleri içinde miyiz veya teneffüste miyiz kontrol edelim
+  for s in saatler:
+    g_saat = s["giris_saati"]
+    c_saat = s["cikis_saati"]
+    sirasi = s["ders_sirasi"]
+
+    if not g_saat or not c_saat:
+      continue
+
+    # 1. Durum: Dersteyiz
+    if g_saat <= simdi_time <= c_saat:
+      kalan_dakika = zaman_dakika_farki(simdi_time, c_saat)
+      return {
+          "mesaj_ust": f"Şu an <strong>{sirasi}.</strong> dersteyiz.",
+          "mesaj_alt": (
+              f"Teneffüs ziline <span"
+              f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
+              " dakika var."
+          ),
+          "tip": "ders",
+      }
+
+  # 2. Durum: Teneffüsteyiz veya dersler henüz başlamadı / bitti
+  # İki ders arası veya dersler arası teneffüs kontrolü
+  for i in range(len(saatler) - 1):
+    c_suanki = saatler[i]["cikis_saati"]
+    g_sonraki = saatler[i + 1]["giris_saati"]
+    sonraki_sirasi = saatler[i + 1]["ders_sirasi"]
+
+    if c_suanki <= simdi_time < g_sonraki:
+      kalan_dakika = zaman_dakika_farki(simdi_time, g_sonraki)
+      return {
+          "mesaj_ust": "Şu an teneffüsteyiz.",
+          "mesaj_alt": (
+              f"<strong>{sonraki_sirasi}.</strong> ders ziline <span"
+              f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
+              " dakika var."
+          ),
+          "tip": "tenefus",
+      }
+
+  # İlk dersten önce miyiz?
+  if saatler and simdi_time < saatler[0]["giris_saati"]:
+    kalan_dakika = zaman_dakika_farki(simdi_time, saatler[0]["giris_saati"])
+    return {
+        "mesaj_ust": "Dersler henüz başlamadı.",
+        "mesaj_alt": (
+            f"<strong>1.</strong> ders ziline <span"
+            f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
+            " dakika var."
+        ),
+        "tip": "tenefus",
+    }
+
+  return {
+      "mesaj_ust": "Bugünkü dersler sona erdi.",
+      "mesaj_alt": "İyi akşamlar dileriz.",
+      "tip": "tenefus",
+  }
+
+
+def guncel_ders_bilgisi_ve_durum(sinif_adi, db):
+  gun_kodlari = {
+      0: "PTS",
+      1: "SAL",
+      2: "ÇAR",
+      3: "PER",
+      4: "CUM",
+      5: "CTS",
+      6: "PAZ",
+  }
+  simdi = datetime.datetime.now()
+  bugun_kod = gun_kodlari.get(simdi.weekday(), "PTS")
+  simdi_time = simdi.strftime("%H:%M")
+
+  temiz_aranan = sinif_temizle(sinif_adi)
+  tum_siniflar = db.execute("SELECT id, ad FROM siniflar").fetchall()
+  sinif_id = None
+
+  for s in tum_siniflar:
+    db_ad_temiz = sinif_temizle(s["ad"])
+    if (
+        temiz_aranan == db_ad_temiz
+        or temiz_aranan in db_ad_temiz
+        or db_ad_temiz in temiz_aranan
+    ):
+      sinif_id = s["id"]
+      break
+
+  if not sinif_id:
+    return "Ders Programı Girilmemiş", None
+
+  saatler = db.execute(
+      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
+  ).fetchall()
+  if not saatler:
+    return "Ders Saatleri Tanımlı Değil", None
+
+  aktif_ders_sirasi = None
+  for s in saatler:
+    g_saat = s["giris_saati"]
+    c_saat = s["cikis_saati"]
+    sirasi = s["ders_sirasi"]
+    if not g_saat or not c_saat:
+      continue
+    if g_saat <= simdi_time <= c_saat:
+      aktif_ders_sirasi = sirasi
+      break
+
+  if not aktif_ders_sirasi:
+    for s in saatler:
+      g_saat = s["giris_saati"]
+      if g_saat and simdi_time < g_saat:
+        aktif_ders_sirasi = s["ders_sirasi"]
+        break
+    if not aktif_ders_sirasi and saatler:
+      aktif_ders_sirasi = 1
+
+  ders_row = db.execute(
+      "SELECT ders_adi FROM ders_programi WHERE sinif_id = ? AND gun = ? AND"
+      " saat = ?",
+      (sinif_id, bugun_kod, aktif_ders_sirasi),
+  ).fetchone()
+
+  if ders_row and ders_row["ders_adi"]:
+    return f"{aktif_ders_sirasi}. Ders: {ders_row['ders_adi']}", aktif_ders_sirasi
+  else:
+    return f"{aktif_ders_sirasi}. Ders: Boş / Ders Yok", aktif_ders_sirasi
+
+
+@app.route("/kat1")
+def kat1():
+  db = get_db()
+  sol_liste = [
+      sinif_bilgisi_getir(s, db) for s in KAT1_SOL if sinif_bilgisi_getir(s, db)
+  ]
+  sag_liste = [
+      sinif_bilgisi_getir(s, db) for s in KAT1_SAG if sinif_bilgisi_getir(s, db)
+  ]
+  okul_durumu = genel_okul_durumu_getir(db)
+  return render_template(
+      "kat1.html",
+      sol_liste=sol_liste,
+      sag_liste=sag_liste,
+      okul_durumu=okul_durumu,
+  )
+
+
+@app.route("/kat2")
+def kat2():
+  db = get_db()
+  sol_liste = [
+      sinif_bilgisi_getir(s, db) for s in KAT2_SOL if sinif_bilgisi_getir(s, db)
+  ]
+  sag_liste = [
+      sinif_bilgisi_getir(s, db) for s in KAT2_SAG if sinif_bilgisi_getir(s, db)
+  ]
+  okul_durumu = genel_okul_durumu_getir(db)
+  return render_template(
+      "kat2.html",
+      sol_liste=sol_liste,
+      sag_liste=sag_liste,
+      okul_durumu=okul_durumu,
+  )
+
+
+@app.route("/ders_programi_yukle", methods=["GET", "POST"])
+def ders_programi_yukle():
+  db = get_db()
+
+  if request.method == "POST":
+    islem = request.form.get("islem")
+
+    if islem == "yeni_sinif":
+      sinif_adi = request.form.get("sinif_adi", "").strip()
+      if sinif_adi:
+        try:
+          db.execute("INSERT INTO siniflar (ad) VALUES (?)", (sinif_adi,))
+          db.commit()
+          flash(f"'{sinif_adi}' sınıfı başarıyla eklendi.", "success")
+        except sqlite3.IntegrityError:
+          flash(f"'{sinif_adi}' adında bir sınıf zaten mevcut!", "danger")
+      return redirect(url_for("ders_programi_yukle"))
+
+    elif islem == "sil_sinif":
+      sinif_id = request.form.get("sinif_id")
+      db.execute("DELETE FROM siniflar WHERE id = ?", (sinif_id,))
+      db.execute("DELETE FROM ders_programi WHERE sinif_id = ?", (sinif_id,))
+      db.commit()
+      flash("Sınıf ve ders programı silindi.", "info")
+      return redirect(url_for("ders_programi_yukle"))
+
+    elif islem == "kaydet_program":
+      sinif_id = request.form.get("sinif_id")
+      gunler = ["PTS", "SAL", "ÇAR", "PER", "CUM", "CTS", "PAZ"]
+      db.execute("DELETE FROM ders_programi WHERE sinif_id = ?", (sinif_id,))
+
+      for gun in gunler:
+        for saat in range(1, 12):
+          ders_degeri = request.form.get(f"cell_{gun}_{saat}", "").strip()
+          if ders_degeri:
+            db.execute(
+                "INSERT INTO ders_programi (sinif_id, gun, saat, ders_adi)"
+                " VALUES (?, ?, ?, ?)",
+                (sinif_id, gun, saat, ders_degeri),
+            )
+      db.commit()
+      flash("Ders programı başarıyla kaydedildi.", "success")
+      return redirect(url_for("ders_programi_yukle", aktif_sinif=sinif_id))
+
+  siniflar = db.execute("SELECT * FROM siniflar ORDER BY ad").fetchall()
+
+  aktif_sinif_id = request.args.get("aktif_sinif")
+  if not aktif_sinif_id and siniflar:
+    aktif_sinif_id = siniflar[0]["id"]
+
+  aktif_sinif = None
+  program_verileri = {}
+
+  if aktif_sinif_id:
+    aktif_sinif = db.execute(
+        "SELECT * FROM siniflar WHERE id = ?", (aktif_sinif_id,)
+    ).fetchone()
+    p_rows = db.execute(
+        "SELECT gun, saat, ders_adi FROM ders_programi WHERE sinif_id = ?",
+        (aktif_sinif_id,),
+    ).fetchall()
+    for row in p_rows:
+      if row["gun"] not in program_verileri:
+        program_verileri[row["gun"]] = {}
+      program_verileri[row["gun"]][row["saat"]] = row["ders_adi"]
+
+  return render_template(
+      "ders_programi_yukle.html",
+      siniflar=siniflar,
+      aktif_sinif=aktif_sinif,
+      program_verileri=program_verileri,
+  )
+
+
+@app.route("/ders_saatleri", methods=["GET", "POST"])
+def ders_saatleri():
+  db = get_db()
+  if request.method == "POST":
+    db.execute("DELETE FROM ders_saatleri")
+    for i in range(1, 21):
+      giris = request.form.get(f"giris_{i}")
+      cikis = request.form.get(f"cikis_{i}")
+      if giris or cikis:
+        db.execute(
+            "INSERT INTO ders_saatleri (ders_sirasi, giris_saati, cikis_saati)"
+            " VALUES (?, ?, ?)",
+            (i, giris, cikis),
+        )
+    db.commit()
+    flash("Ders saatleri başarıyla güncellendi!", "success")
+    return redirect(url_for("ders_saatleri"))
+
+  saatler = db.execute(
+      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
+  ).fetchall()
+  return render_template("ders_saatleri.html", saatler=saatler)
+
+
+@app.route("/ayarlar", methods=["GET", "POST"])
+def ayarlar():
+  global ogretmen_listesi, sinif_listesi, sinif_isimleri
+
+  if request.method == "POST":
+    if "ogretmen_pdf_dosyasi" in request.files:
+      file = request.files["ogretmen_pdf_dosyasi"]
+      if file and file.filename.endswith(".pdf"):
+        file.save(OGRETMEN_PDF)
+        ogretmen_listesi = ogretmen_pdf_isle(OGRETMEN_PDF, OGRETMEN_KLASORU)
+        flash("Öğretmen PDF dosyası başarıyla güncellendi!", "success")
+      else:
+        flash("Lütfen geçerli bir Öğretmen PDF dosyası seçin!", "danger")
+      return redirect(url_for("ayarlar"))
+
+    if "sinif_pdf_dosyasi" in request.files:
+      file = request.files["sinif_pdf_dosyasi"]
+      if file and file.filename.endswith(".pdf"):
+        file.save(SINIF_PDF)
+        sinif_listesi, sinif_isimleri = sinif_pdf_isle(SINIF_PDF, SINIF_KLASORU)
+        flash("Sınıf PDF dosyası başarıyla güncellendi!", "success")
+      else:
+        flash("Lütfen geçerli bir Sınıf PDF dosyası seçin!", "danger")
+      return redirect(url_for("ayarlar"))
+
+  return render_template("ayarlar.html")
+
+
+if __name__ == "__main__":
+  app.run(debug=True, use_reloader=False)
