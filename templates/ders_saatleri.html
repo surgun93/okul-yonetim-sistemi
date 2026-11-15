@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Ders Başlangıç ve Bitiş Saatleri</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 25px; font-size: 26px; }
+        
+        /* Üst Menü Standardı */
+        .top-nav { display: flex; justify-content: center; gap: 20px; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 25px; flex-wrap: wrap; }
+        .top-nav a { padding: 10px 20px; text-decoration: none; color: #007bff; font-weight: bold; font-size: 16px; border-radius: 6px 6px 0 0; }
+        .top-nav a:hover { background-color: #e9ecef; }
+        .top-nav .active { background-color: #fff; border: 1px solid #ddd; border-bottom: 2px solid #fff; color: #333; }
+
+        .alert { background-color: #d4edda; color: #155724; padding: 12px; border-radius: 4px; margin-bottom: 20px; text-align: center; font-weight: bold; }
+
+        h2 { font-size: 20px; color: #333; margin-bottom: 15px; }
+        .options-row { margin-bottom: 20px; font-size: 15px; color: #333; }
+        .options-row label { margin-right: 20px; font-weight: bold; }
+
+        /* Saat Kutuları Izgarası */
+        .hours-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .hour-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 15px; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .hour-title { font-weight: bold; margin-bottom: 10px; color: #444; font-size: 14px; }
+        .time-input-group { display: flex; align-items: center; justify-content: space-between; border: 1px solid #ced4da; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px; background: #fff; }
+        .time-input-group input { border: none; outline: none; font-size: 15px; width: 80px; font-family: monospace; }
+        
+        .btn-remove { position: absolute; top: 10px; right: 10px; background: none; border: none; color: #dc3545; font-size: 16px; cursor: pointer; font-weight: bold; }
+        .btn-add { background-color: #28a745; color: white; border: none; width: 45px; height: 45px; border-radius: 6px; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-add:hover { background-color: #218838; }
+
+        .btn-save { background-color: #007bff; color: white; border: none; padding: 12px 25px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; float: right; margin-top: 15px; }
+        .btn-save:hover { background-color: #0056b3; }
+        .clearfix::after { content: ""; clear: both; display: table; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Çamaş Türk Telekom Çok Programlı Anadolu Lisesi</h1>
+        
+        <!-- Üst Menü -->
+        <div class="top-nav">
+            <a href="{{ url_for('index') }}">Ana Sayfa</a>
+            <a href="{{ url_for('kat1') }}">1. Kat</a>
+            <a href="{{ url_for('kat2') }}">2. Kat</a>
+            <a href="{{ url_for('ders_saatleri') }}" class="active">Ders Saatleri</a>
+            <a href="{{ url_for('ayarlar') }}">Ayarlar (Dosya Yükle)</a>
+            <a href="{{ url_for('ders_programi_yukle') }}">Ders Programı Yükle</a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <h2>Ders Başlangıç ve Bitiş Saatleri</h2>
+        
+        <div class="options-row">
+            <span>Öğretim Şekli:</span>
+            <label><input type="radio" name="ogretim_sekli" checked> Normal Öğretim</label>
+            <label><input type="radio" name="ogretim_sekli"> İkili Öğretim</label>
+        </div>
+
+        <form method="POST">
+            <div class="hours-grid" id="hoursGrid">
+                {% if saatler %}
+                    {% for s in saatler %}
+                    <div class="hour-card" data-index="{{ loop.index }}">
+                        <div class="hour-title">{{ loop.index }}. ders</div>
+                        <button type="button" class="btn-remove" onclick="cardSil(this)">✕</button>
+                        <div class="time-input-group">
+                            <input type="time" name="giris_{{ loop.index }}" value="{{ s['giris_saati'] }}">
+                            <span>🕒</span>
+                        </div>
+                        <div class="time-input-group">
+                            <input type="time" name="cikis_{{ loop.index }}" value="{{ s['cikis_saati'] }}">
+                            <span>🕒</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <!-- Varsayılan örnek 8 ders -->
+                    <script>
+                        // Veritabanı boşsa ilk açılışta 8 ders ekleyelim
+                        window.addEventListener("DOMContentLoaded", () => {
+                            for(let i=1; i<=8; i++) yeniDersEkleDefault(i, "08:30", "09:10");
+                        });
+                    </script>
+                {% endif %}
+            </div>
+
+            <button type="button" class="btn-add" onclick="dersEkle()" title="Yeni Ders Ekle">+</button>
+
+            <div class="clearfix">
+                <button type="submit" class="btn-save">💾 Ders Saatlerini Kaydet</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function dersEkle() {
+            const grid = document.getElementById("hoursGrid");
+            const count = grid.getElementsByClassName("hour-card").length + 1;
+            
+            const card = document.createElement("div");
+            card.className = "hour-card";
+            card.setAttribute("data-index", count);
+            card.innerHTML = `
+                <div class="hour-title">${count}. ders</div>
+                <button type="button" class="btn-remove" onclick="cardSil(this)">✕</button>
+                <div class="time-input-group">
+                    <input type="time" name="giris_${count}" value="08:30">
+                    <span>🕒</span>
+                </div>
+                <div class="time-input-group">
+                    <input type="time" name="cikis_${count}" value="09:10">
+                    <span>🕒</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        }
+
+        function yeniDersEkleDefault(index, giris, cikis) {
+            const grid = document.getElementById("hoursGrid");
+            const card = document.createElement("div");
+            card.className = "hour-card";
+            card.setAttribute("data-index", index);
+            card.innerHTML = `
+                <div class="hour-title">${index}. ders</div>
+                <button type="button" class="btn-remove" onclick="cardSil(this)">✕</button>
+                <div class="time-input-group">
+                    <input type="time" name="giris_${index}" value="${giris}">
+                    <span>🕒</span>
+                </div>
+                <div class="time-input-group">
+                    <input type="time" name="cikis_${index}" value="${cikis}">
+                    <span>🕒</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        }
+
+        function cardSil(btn) {
+            const card = btn.closest(".hour-card");
+            card.remove();
+            guncelleIndexler();
+        }
+
+        function guncelleIndexler() {
+            const cards = document.querySelectorAll(".hour-card");
+            cards.forEach((card, idx) => {
+                const num = idx + 1;
+                card.setAttribute("data-index", num);
+                card.querySelector(".hour-title").innerText = num + ". ders";
+                card.querySelector("input[name^='giris_']").setAttribute("name", "giris_" + num);
+                card.querySelector("input[name^='cikis_']").setAttribute("name", "cikis_" + num);
+            });
+        }
+    </script>
+</body>
+</html>
