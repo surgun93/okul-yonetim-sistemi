@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Ders Programı Yönetimi ve Excel Yükleme</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
+        .container { max-width: 1350px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; font-size: 24px; }
+        
+        /* Üst Menü */
+        .top-nav { display: flex; justify-content: center; gap: 20px; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 25px; }
+        .top-nav a { padding: 10px 20px; text-decoration: none; color: #007bff; font-weight: bold; font-size: 16px; border-radius: 6px 6px 0 0; }
+        .top-nav a:hover { background-color: #e9ecef; }
+        .top-nav .active { background-color: #fff; border: 1px solid #ddd; border-bottom: 2px solid #fff; color: #333; }
+
+        /* Mesajlar */
+        .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; text-align: center; font-size: 14px; font-weight: bold; }
+        .alert-success { background-color: #d4edda; color: #155724; }
+        .alert-danger { background-color: #f8d7da; color: #721c24; }
+        .alert-info { background-color: #d1ecf1; color: #0c5460; }
+
+        /* Ana Düzen (Grid) */
+        .main-layout { display: flex; gap: 25px; align-items: flex-start; }
+        
+        /* Sol Sınıf Listesi */
+        .sidebar { width: 250px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 10px; flex-shrink: 0; }
+        .class-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 12px; margin-bottom: 8px; border-radius: 4px; border: 1px solid #ccc; text-decoration: none; color: #333; font-weight: bold; }
+        .class-item:hover { background-color: #e2e6ea; }
+        .class-item.active { background-color: #007bff; color: white; border-color: #0056b3; }
+        .class-actions { display: flex; gap: 5px; }
+        .btn-icon { padding: 4px 8px; font-size: 12px; border: none; border-radius: 3px; cursor: pointer; color: white; }
+        .btn-delete { background-color: #dc3545; }
+
+        /* Yeni Sınıf Ekle Kutusu */
+        .add-class-box { margin-top: 20px; background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 6px; }
+        .add-class-box h3 { font-size: 15px; margin-bottom: 10px; color: #333; }
+        .add-class-box input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-success { background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+
+        /* Sağ Tablo Alanı */
+        .content-panel { flex-grow: 1; overflow-x: auto; }
+        .table-container { overflow-x: auto; }
+        .schedule-table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 15px; }
+        .schedule-table th, .schedule-table td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+        .schedule-table th { background-color: #f1f3f5; font-size: 14px; color: #333; }
+        .schedule-table td input { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #ced4da; border-radius: 3px; text-align: center; font-size: 12px; }
+        .schedule-table td input:focus { border-color: #80bdff; outline: none; background-color: #ffffd6; }
+        .day-label { font-weight: bold; background-color: #f8f9fa; width: 60px; }
+
+        /* Alt Butonlar */
+        .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-excel { background-color: #198754; color: white; border: none; padding: 10px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .btn-clear { background-color: #dc3545; color: white; border: none; padding: 10px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .btn-save { background-color: #0d6efd; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; float: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ders Programı Yönetimi ve Excel Girişi</h1>
+        
+        <!-- Üst Menü -->
+        <div class="top-nav">
+            <a href="{{ url_for('index') }}">Ana Sayfa</a>
+            <a href="{{ url_for('kat1') }}">1. Kat</a>
+            <a href="{{ url_for('kat2') }}">2. Kat</a>
+	    <a href="{{ url_for('ayarlar') }}">Ayarlar (Dosya Yükle)</a>
+            <a href="{{ url_for('ders_programi_yukle') }}" class="active">Ders Programı Yükle</a>
+<a href="{{ url_for('ders_saatleri') }}">Ders Saatleri</a>
+            </div>
+
+        <!-- Flaş Mesajlar -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category if category != 'success' else 'success' }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="main-layout">
+            <!-- SOL: Sınıflar Listesi ve Sınıf Ekleme -->
+            <div class="sidebar">
+                <div style="font-weight: bold; margin-bottom: 10px; font-size: 15px; color: #555;">Sınıflar</div>
+                {% for s in siniflar %}
+                    <div class="class-item {% if aktif_sinif and aktif_sinif['id'] == s['id'] %}active{% endif %}">
+                        <a href="{{ url_for('ders_programi_yukle', aktif_sinif=s['id']) }}" style="text-decoration: none; color: inherit; flex-grow: 1;">
+                            {{ s['ad'] }}
+                        </a>
+                        <div class="class-actions">
+                            <form method="POST" onsubmit="return confirm('Bu sınıfı ve programını silmek istediğinize emin misiniz?');" style="display:inline;">
+                                <input type="hidden" name="islem" value="sil_sinif">
+                                <input type="hidden" name="sinif_id" value="{{ s['id'] }}">
+                                <button type="submit" class="btn-icon btn-delete" title="Sil">🗑</button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <p style="font-size: 13px; color: #776; text-align: center;">Henüz sınıf eklenmemiş.</p>
+                {% endfor %}
+
+                <!-- Yeni Sınıf Ekle -->
+                <div class="add-class-box">
+                    <h3>Yeni Sınıf Ekle</h3>
+                    <form method="POST">
+                        <input type="hidden" name="islem" value="yeni_sinif">
+                        <input type="text" name="sinif_adi" placeholder="Örn: 12-ÇGL" required>
+                        <button type="submit" class="btn-success">+ Ekle</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- SAĞ: Ders Programı Tablosu -->
+            <div class="content-panel">
+                {% if aktif_sinif %}
+                    <h2 style="margin-top: 0; color: #007bff; font-size: 20px;">Sınıf: {{ aktif_sinif['ad'] }}</h2>
+                    
+                    <form method="POST" id="programForm">
+                        <input type="hidden" name="islem" value="kaydet_program">
+                        <input type="hidden" name="sinif_id" value="{{ aktif_sinif['id'] }}">
+
+                        <div class="table-container">
+                            <table class="schedule-table" id="scheduleTable">
+                                <thead>
+                                    <tr>
+                                        <th>Ders\Gün</th>
+                                        {% for saat in range(1, 12) %}
+                                            <th>{{ saat }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% set gunler = [('PTS', 'Pazartesi'), ('SAL', 'Salı'), ('ÇAR', 'Çarşamba'), ('PER', 'Perşembe'), ('CUM', 'Cuma'), ('CTS', 'Cumartesi'), ('PAZ', 'Pazar')] %}
+                                    {% for kod, ad in gunler %}
+                                    <tr>
+                                        <td class="day-label">{{ kod }}</td>
+                                        {% for saat in range(1, 12) %}
+                                            <td>
+                                                <input type="text" 
+                                                       name="cell_{{ kod }}_{{ saat }}" 
+                                                       value="{{ program_verileri.get(kod, {}).get(saat, '') }}">
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="action-buttons">
+                            <button type="button" class="btn-excel" onclick="exceldenYapistir()">📋 Excel'den Yapıştır</button>
+                            <button type="button" class="btn-clear" onclick="tabloyuTemizle()">🧹 Temizle</button>
+                            <button type="submit" class="btn-save">💾 Programı Kaydet</button>
+                        </div>
+                    </form>
+                {% else %}
+                    <div style="text-align: center; padding: 50px; color: #666; background: #f8f9fa; border-radius: 6px;">
+                        <h3>Sol taraftan bir sınıf seçin veya yeni bir sınıf ekleyin.</h3>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function parseExcelClipboard(text) {
+            let rows = [];
+            let currentRow = [];
+            let currentField = "";
+            let inQuotes = false;
+            
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                let nextChar = text[i+1];
+                
+                if (inQuotes) {
+                    if (char === '"') {
+                        if (nextChar === '"') {
+                            currentField += '"';
+                            i++;
+                        } else {
+                            inQuotes = false;
+                        }
+                    } else {
+                        currentField += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuotes = true;
+                    } else if (char === '\t') {
+                        currentRow.push(currentField);
+                        currentField = "";
+                    } else if (char === '\r') {
+                        // Satır başını yoksay
+                    } else if (char === '\n') {
+                        currentRow.push(currentField);
+                        rows.push(currentRow);
+                        currentRow = [];
+                        currentField = "";
+                    } else {
+                        currentField += char;
+                    }
+                }
+            }
+            if (currentField !== "" || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            return rows;
+        }
+
+        function exceldenYapistir() {
+            navigator.clipboard.readText().then(text => {
+                const excelRows = parseExcelClipboard(text);
+                const tableRows = document.querySelectorAll("#scheduleTable tbody tr");
+                
+                let excelRowIdx = 0;
+                tableRows.forEach((tr) => {
+                    if (excelRows[excelRowIdx]) {
+                        const inputs = tr.querySelectorAll("input");
+                        const currentExcelRow = excelRows[excelRowIdx];
+                        
+                        inputs.forEach((input, cIdx) => {
+                            if (currentExcelRow[cIdx] !== undefined) {
+                                let cellVal = currentExcelRow[cIdx].trim();
+                                cellVal = cellVal.replace(/[\r\n]+/g, " "); 
+                                input.value = cellVal;
+                            }
+                        });
+                    }
+                    excelRowIdx++;
+                });
+                alert("Excel verileri 11 saate kadar başarıyla yapıştırıldı! Kaydetmeyi unutmayın.");
+            }).catch(err => {
+                alert("Panodan veri okunamadı. Tarayıcı izinlerini kontrol edin.");
+            });
+        }
+
+        function tabloyuTemizle() {
+            if (confirm("Tablodaki tüm dersleri temizlemek istediğinize emin misiniz?")) {
+                document.querySelectorAll("#scheduleTable tbody input").forEach(input => {
+                    input.value = "";
+                });
+            }
+        }
+    </script>
+</body>
+</html>
