@@ -68,6 +68,14 @@ os.makedirs(OGRETMEN_KLASORU, exist_ok=True)
 os.makedirs(SINIF_KLASORU, exist_ok=True)
 
 
+# --- TÜRKİYE SAATİNİ SABİTLEYEN YARDIMCI FONKSİYON ---
+def turkiye_zamani_al():
+  # UTC saatine 3 saat ekleyerek her zaman Türkiye yerel saatini garanti ederiz
+  utc_zaman = datetime.datetime.utcnow()
+  turkiye_zamani = utc_zaman + datetime.timedelta(hours=3)
+  return turkiye_zamani
+
+
 def ogretmen_temizle(metin):
   if not metin:
     return ""
@@ -331,26 +339,21 @@ def sinif_bilgisi_getir(hedef_ad, db):
 
 
 def zaman_dakika_farki(saat_str1, saat_str2):
-  # "HH:MM" formatındaki iki saat arasındaki dakika farkını döndürür (saat2 - saat1)
   h1, m1 = map(int, saat_str1.split(":"))
   h2, m2 = map(int, saat_str2.split(":"))
   return (h2 * 60 + m2) - (h1 * 60 + m1)
 
 
 def genel_okul_durumu_getir(db):
-  simdi = datetime.datetime.now()
+  simdi = turkiye_zamani_al()
   simdi_time = simdi.strftime("%H:%M")
 
   saatler = db.execute(
       "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
   ).fetchall()
   if not saatler:
-    return {
-        "mesaj": "Ders Saatleri Tanımlı Değil",
-        "tip": "tenefus",
-    }
+    return {"mesaj_ust": "Ders Saatleri Tanımlı Değil", "mesaj_alt": ""}
 
-  # Ders saatleri içinde miyiz veya teneffüste miyiz kontrol edelim
   for s in saatler:
     g_saat = s["giris_saati"]
     c_saat = s["cikis_saati"]
@@ -359,7 +362,7 @@ def genel_okul_durumu_getir(db):
     if not g_saat or not c_saat:
       continue
 
-    # 1. Durum: Dersteyiz
+    # Dersteyiz
     if g_saat <= simdi_time <= c_saat:
       kalan_dakika = zaman_dakika_farki(simdi_time, c_saat)
       return {
@@ -372,8 +375,7 @@ def genel_okul_durumu_getir(db):
           "tip": "ders",
       }
 
-  # 2. Durum: Teneffüsteyiz veya dersler henüz başlamadı / bitti
-  # İki ders arası veya dersler arası teneffüs kontrolü
+  # Teneffüsteyiz
   for i in range(len(saatler) - 1):
     c_suanki = saatler[i]["cikis_saati"]
     g_sonraki = saatler[i + 1]["giris_saati"]
@@ -391,7 +393,7 @@ def genel_okul_durumu_getir(db):
           "tip": "tenefus",
       }
 
-  # İlk dersten önce miyiz?
+  # İlk dersten önce
   if saatler and simdi_time < saatler[0]["giris_saati"]:
     kalan_dakika = zaman_dakika_farki(simdi_time, saatler[0]["giris_saati"])
     return {
@@ -421,7 +423,7 @@ def guncel_ders_bilgisi_ve_durum(sinif_adi, db):
       5: "CTS",
       6: "PAZ",
   }
-  simdi = datetime.datetime.now()
+  simdi = turkiye_zamani_al()
   bugun_kod = gun_kodlari.get(simdi.weekday(), "PTS")
   simdi_time = simdi.strftime("%H:%M")
 
@@ -643,4 +645,4 @@ def ayarlar():
 
 
 if __name__ == "__main__":
-  app.run(debug=True, use_reloader=False)
+  app.run(debug=False, use_reloader=False)
