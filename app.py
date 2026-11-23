@@ -1,14 +1,35 @@
 import datetime
+from functools import wraps
 import os
 import sqlite3
-from flask import Flask, flash, g, redirect, render_template, request, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 import fitz  # PyMuPDF kütüphanesi
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.secret_key = "gizli_anahtar_guvenlik_icin"
+app.secret_key = os.environ.get(
+    "FLASK_SECRET_KEY", "ordu_karsiyaka_mahallesi52"
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# Tek kullanıcı kimlik bilgileri (parola hashlenerek saklanır)
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD_HASH = generate_password_hash("dolunay_serinsok52")
 
 # Veritabanı dosyası
 DATABASE = "sinif.db"
+
+MEZUN_YILLARI = [
+    "2018/2019 Mezun",
+    "2019/2020 Mezun",
+    "2020/2021 Mezun",
+    "2021/2022 Mezun",
+    "2022/2023 Mezun",
+    "2023/2024 Mezun",
+    "2024/2025 Mezun",
+    "2025/2026 Mezun",
+]
 
 
 def get_db():
@@ -53,6 +74,15 @@ def init_db():
                 cikis_saati TEXT
             )
         """)
+    db.execute("""
+            CREATE TABLE IF NOT EXISTS mezunlar (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ad_soyad TEXT NOT NULL,
+                mezuniyet_yili TEXT NOT NULL,
+                resim_yolu TEXT,
+                aciklama TEXT DEFAULT ''
+            )
+        """)
     db.commit()
 
 
@@ -63,17 +93,97 @@ SINIF_PDF = os.path.join("static", "sinif_programi.pdf")
 
 OGRETMEN_KLASORU = "static/ogretmenler"
 SINIF_KLASORU = "static/siniflar"
+MEZUN_FOTOLAR_KLASORU = "static/mezun_fotolari"
 
 os.makedirs(OGRETMEN_KLASORU, exist_ok=True)
 os.makedirs(SINIF_KLASORU, exist_ok=True)
+os.makedirs(MEZUN_FOTOLAR_KLASORU, exist_ok=True)
+
+
+# --- OTURUM YÖNETİMİ ---
+def login_required(f):
+  @wraps(f)
+  def decorated_function(*args, **kwargs):
+    if not session.get("logged_in"):
+      if request.path.startswith("/api/"):
+        return jsonify({"error": "Oturum gerekli"}), 401
+      return redirect(url_for("login", next=request.path))
+    return f(*args, **kwargs)
+
+  return decorated_function
+
+
+@app.before_request
+def require_login_for_all_pages():
+  acik_rotalar = {"login", "static"}
+  if request.endpoint in acik_rotalar or request.endpoint is None:
+    return None
+  if not session.get("logged_in"):
+    if request.path.startswith("/api/"):
+      return jsonify({"error": "Oturum gerekli"}), 401
+    return redirect(url_for("login", next=request.path))
+  return None
+
+
+@app.context_processor
+def inject_user_info():
+  return {"aktif_kullanici": session.get("username", "")}
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+  if session.get("logged_in"):
+    return redirect(url_for("index"))
+
+  if request.method == "POST":
+    kullanici_adi = request.form.get("username", "").strip()
+    parola = request.form.get("password", "")
+
+    if kullanici_adi == ADMIN_USERNAME and check_password_hash(
+        ADMIN_PASSWORD_HASH, parola
+    ):
+      session.clear()
+      session["logged_in"] = True
+      session["username"] = ADMIN_USERNAME
+      next_url = request.form.get("next") or request.args.get("next")
+      if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
+      return redirect(url_for("index"))
+    else:
+      flash("Kullanıcı adı veya parola hatalı!", "danger")
+
+  next_page = request.args.get("next", "")
+  return render_template("login.html", next_page=next_page)
+
+
+@app.route("/logout")
+@login_required
+def logout():
+  session.clear()
+  flash("Oturumunuz güvenli şekilde kapatıldı.", "info")
+  return redirect(url_for("login"))
 
 
 # --- TÜRKİYE SAATİNİ SABİTLEYEN YARDIMCI FONKSİYON ---
 def turkiye_zamani_al():
-  # UTC saatine 3 saat ekleyerek her zaman Türkiye yerel saatini garanti ederiz
   utc_zaman = datetime.datetime.utcnow()
   turkiye_zamani = utc_zaman + datetime.timedelta(hours=3)
   return turkiye_zamani
+
+
+def tr_buyuk(metin):
+  if not metin:
+    return ""
+  return (
+      metin.replace("i", "İ")
+      .replace("ı", "I")
+      .replace("ç", "Ç")
+      .replace("ğ", "Ğ")
+      .replace("ö", "Ö")
+      .replace("ş", "Ş")
+      .replace("ü", "Ü")
+      .upper()
+  )
 
 
 def ogretmen_temizle(metin):
@@ -183,7 +293,176 @@ KAT2_SOL = ["12a", "11a"]
 KAT2_SAG = []
 
 
+def zaman_dakika_farki(saat_str1, saat_str2):
+  h1, m1 = map(int, saat_str1.split(":"))
+  h2, m2 = map(int, saat_str2.split(":"))
+  return (h2 * 60 + m2) - (h1 * 60 + m1)
+
+
+def genel_okul_durumu_getir(db):
+  simdi = turkiye_zamani_al()
+  simdi_time = simdi.strftime("%H:%M")
+
+  saatler = db.execute(
+      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
+  ).fetchall()
+  if not saatler:
+    return {"mesaj_ust": "Ders Saatleri Tanımlı Değil", "mesaj_alt": ""}
+
+  for s in saatler:
+    g_saat = s["giris_saati"]
+    c_saat = s["cikis_saati"]
+    sirasi = s["ders_sirasi"]
+
+    if not g_saat or not c_saat:
+      continue
+
+    if g_saat <= simdi_time <= c_saat:
+      kalan_dakika = zaman_dakika_farki(simdi_time, c_saat)
+      return {
+          "mesaj_ust": f"Şu an <strong>{sirasi}.</strong> dersteyiz.",
+          "mesaj_alt": (
+              f"Teneffüs ziline <span"
+              f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
+              " dakika var."
+          ),
+          "tip": "ders",
+      }
+
+  for i in range(len(saatler) - 1):
+    c_suanki = saatler[i]["cikis_saati"]
+    g_sonraki = saatler[i + 1]["giris_saati"]
+    sonraki_sirasi = saatler[i + 1]["ders_sirasi"]
+
+    if c_suanki <= simdi_time < g_sonraki:
+      kalan_dakika = zaman_dakika_farki(simdi_time, g_sonraki)
+      return {
+          "mesaj_ust": "Şu an teneffüsteyiz.",
+          "mesaj_alt": (
+              f"<strong>{sonraki_sirasi}.</strong> ders ziline <span"
+              f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
+              " dakika var."
+          ),
+          "tip": "tenefus",
+      }
+
+  if saatler and simdi_time < saatler[0]["giris_saati"]:
+    kalan_dakika = zaman_dakika_farki(simdi_time, saatler[0]["giris_saati"])
+    return {
+        "mesaj_ust": "Dersler henüz başlamadı.",
+        "mesaj_alt": (
+            f"<strong>1.</strong> ders ziline <span"
+            f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
+            " dakika var."
+        ),
+        "tip": "tenefus",
+    }
+
+  return {
+      "mesaj_ust": "Bugünkü dersler sona erdi.",
+      "mesaj_alt": "İyi akşamlar dileriz.",
+      "tip": "tenefus",
+  }
+
+
+def guncel_ders_bilgisi_ve_durum(sinif_adi, db):
+  gun_kodlari = {
+      0: "PTS",
+      1: "SAL",
+      2: "ÇAR",
+      3: "PER",
+      4: "CUM",
+      5: "CTS",
+      6: "PAZ",
+  }
+  simdi = turkiye_zamani_al()
+  bugun_kod = gun_kodlari.get(simdi.weekday(), "PTS")
+  simdi_time = simdi.strftime("%H:%M")
+
+  temiz_aranan = sinif_temizle(sinif_adi)
+  tum_siniflar = db.execute("SELECT id, ad FROM siniflar").fetchall()
+  sinif_id = None
+
+  for s in tum_siniflar:
+    db_ad_temiz = sinif_temizle(s["ad"])
+    if (
+        temiz_aranan == db_ad_temiz
+        or temiz_aranan in db_ad_temiz
+        or db_ad_temiz in temiz_aranan
+    ):
+      sinif_id = s["id"]
+      break
+
+  if not sinif_id:
+    return "Ders Programı Girilmemiş", None
+
+  saatler = db.execute(
+      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
+  ).fetchall()
+  if not saatler:
+    return "Ders Saatleri Tanımlı Değil", None
+
+  aktif_ders_sirasi = None
+  for s in saatler:
+    g_saat = s["giris_saati"]
+    c_saat = s["cikis_saati"]
+    sirasi = s["ders_sirasi"]
+    if not g_saat or not c_saat:
+      continue
+    if g_saat <= simdi_time <= c_saat:
+      aktif_ders_sirasi = sirasi
+      break
+
+  if not aktif_ders_sirasi:
+    for s in saatler:
+      g_saat = s["giris_saati"]
+      if g_saat and simdi_time < g_saat:
+        aktif_ders_sirasi = s["ders_sirasi"]
+        break
+    if not aktif_ders_sirasi and saatler:
+      aktif_ders_sirasi = 1
+
+  ders_row = db.execute(
+      "SELECT ders_adi FROM ders_programi WHERE sinif_id = ? AND gun = ? AND"
+      " saat = ?",
+      (sinif_id, bugun_kod, aktif_ders_sirasi),
+  ).fetchone()
+
+  if ders_row and ders_row["ders_adi"]:
+    return f"{aktif_ders_sirasi}. Ders: {ders_row['ders_adi']}", aktif_ders_sirasi
+  else:
+    return f"{aktif_ders_sirasi}. Ders: Boş / Ders Yok", aktif_ders_sirasi
+
+
+def sinif_bilgisi_getir(hedef_ad, db):
+  hedef_temiz_str = sinif_temizle(hedef_ad)
+  bulunan_pdf_item = None
+  for item in sinif_listesi:
+    if (
+        item["baslik"] == hedef_temiz_str
+        or item["baslik"].replace(" ", "") == hedef_temiz_str.replace(" ", "")
+        or hedef_temiz_str in item["baslik"]
+        or item["baslik"] in hedef_temiz_str
+    ):
+      bulunan_pdf_item = item
+      break
+
+  anlik_ders, _ = guncel_ders_bilgisi_ve_durum(hedef_ad, db)
+
+  if bulunan_pdf_item:
+    kopya_item = dict(bulunan_pdf_item)
+    kopya_item["anlik_ders"] = anlik_ders
+    return kopya_item
+  else:
+    return {
+        "orijinal_baslik": hedef_ad,
+        "resim": "",
+        "anlik_ders": anlik_ders,
+    }
+
+
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def index():
   global ogretmen_listesi, sinif_listesi, sinif_isimleri
   secilen_resim = None
@@ -311,178 +590,8 @@ def index():
   )
 
 
-def sinif_bilgisi_getir(hedef_ad, db):
-  hedef_temiz_str = sinif_temizle(hedef_ad)
-  bulunan_pdf_item = None
-  for item in sinif_listesi:
-    if (
-        item["baslik"] == hedef_temiz_str
-        or item["baslik"].replace(" ", "") == hedef_temiz_str.replace(" ", "")
-        or hedef_temiz_str in item["baslik"]
-        or item["baslik"] in hedef_temiz_str
-    ):
-      bulunan_pdf_item = item
-      break
-
-  anlik_ders, _ = guncel_ders_bilgisi_ve_durum(hedef_ad, db)
-
-  if bulunan_pdf_item:
-    kopya_item = dict(bulunan_pdf_item)
-    kopya_item["anlik_ders"] = anlik_ders
-    return kopya_item
-  else:
-    return {
-        "orijinal_baslik": hedef_ad,
-        "resim": "",
-        "anlik_ders": anlik_ders,
-    }
-
-
-def zaman_dakika_farki(saat_str1, saat_str2):
-  h1, m1 = map(int, saat_str1.split(":"))
-  h2, m2 = map(int, saat_str2.split(":"))
-  return (h2 * 60 + m2) - (h1 * 60 + m1)
-
-
-def genel_okul_durumu_getir(db):
-  simdi = turkiye_zamani_al()
-  simdi_time = simdi.strftime("%H:%M")
-
-  saatler = db.execute(
-      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
-  ).fetchall()
-  if not saatler:
-    return {"mesaj_ust": "Ders Saatleri Tanımlı Değil", "mesaj_alt": ""}
-
-  for s in saatler:
-    g_saat = s["giris_saati"]
-    c_saat = s["cikis_saati"]
-    sirasi = s["ders_sirasi"]
-
-    if not g_saat or not c_saat:
-      continue
-
-    # Dersteyiz
-    if g_saat <= simdi_time <= c_saat:
-      kalan_dakika = zaman_dakika_farki(simdi_time, c_saat)
-      return {
-          "mesaj_ust": f"Şu an <strong>{sirasi}.</strong> dersteyiz.",
-          "mesaj_alt": (
-              f"Teneffüs ziline <span"
-              f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
-              " dakika var."
-          ),
-          "tip": "ders",
-      }
-
-  # Teneffüsteyiz
-  for i in range(len(saatler) - 1):
-    c_suanki = saatler[i]["cikis_saati"]
-    g_sonraki = saatler[i + 1]["giris_saati"]
-    sonraki_sirasi = saatler[i + 1]["ders_sirasi"]
-
-    if c_suanki <= simdi_time < g_sonraki:
-      kalan_dakika = zaman_dakika_farki(simdi_time, g_sonraki)
-      return {
-          "mesaj_ust": "Şu an teneffüsteyiz.",
-          "mesaj_alt": (
-              f"<strong>{sonraki_sirasi}.</strong> ders ziline <span"
-              f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
-              " dakika var."
-          ),
-          "tip": "tenefus",
-      }
-
-  # İlk dersten önce
-  if saatler and simdi_time < saatler[0]["giris_saati"]:
-    kalan_dakika = zaman_dakika_farki(simdi_time, saatler[0]["giris_saati"])
-    return {
-        "mesaj_ust": "Dersler henüz başlamadı.",
-        "mesaj_alt": (
-            f"<strong>1.</strong> ders ziline <span"
-            f" style='font-size:22px;'><strong>{kalan_dakika}</strong></span>"
-            " dakika var."
-        ),
-        "tip": "tenefus",
-    }
-
-  return {
-      "mesaj_ust": "Bugünkü dersler sona erdi.",
-      "mesaj_alt": "İyi akşamlar dileriz.",
-      "tip": "tenefus",
-  }
-
-
-def guncel_ders_bilgisi_ve_durum(sinif_adi, db):
-  gun_kodlari = {
-      0: "PTS",
-      1: "SAL",
-      2: "ÇAR",
-      3: "PER",
-      4: "CUM",
-      5: "CTS",
-      6: "PAZ",
-  }
-  simdi = turkiye_zamani_al()
-  bugun_kod = gun_kodlari.get(simdi.weekday(), "PTS")
-  simdi_time = simdi.strftime("%H:%M")
-
-  temiz_aranan = sinif_temizle(sinif_adi)
-  tum_siniflar = db.execute("SELECT id, ad FROM siniflar").fetchall()
-  sinif_id = None
-
-  for s in tum_siniflar:
-    db_ad_temiz = sinif_temizle(s["ad"])
-    if (
-        temiz_aranan == db_ad_temiz
-        or temiz_aranan in db_ad_temiz
-        or db_ad_temiz in temiz_aranan
-    ):
-      sinif_id = s["id"]
-      break
-
-  if not sinif_id:
-    return "Ders Programı Girilmemiş", None
-
-  saatler = db.execute(
-      "SELECT * FROM ders_saatleri ORDER BY ders_sirasi"
-  ).fetchall()
-  if not saatler:
-    return "Ders Saatleri Tanımlı Değil", None
-
-  aktif_ders_sirasi = None
-  for s in saatler:
-    g_saat = s["giris_saati"]
-    c_saat = s["cikis_saati"]
-    sirasi = s["ders_sirasi"]
-    if not g_saat or not c_saat:
-      continue
-    if g_saat <= simdi_time <= c_saat:
-      aktif_ders_sirasi = sirasi
-      break
-
-  if not aktif_ders_sirasi:
-    for s in saatler:
-      g_saat = s["giris_saati"]
-      if g_saat and simdi_time < g_saat:
-        aktif_ders_sirasi = s["ders_sirasi"]
-        break
-    if not aktif_ders_sirasi and saatler:
-      aktif_ders_sirasi = 1
-
-  ders_row = db.execute(
-      "SELECT ders_adi FROM ders_programi WHERE sinif_id = ? AND gun = ? AND"
-      " saat = ?",
-      (sinif_id, bugun_kod, aktif_ders_sirasi),
-  ).fetchone()
-
-  if ders_row and ders_row["ders_adi"]:
-    return f"{aktif_ders_sirasi}. Ders: {ders_row['ders_adi']}", aktif_ders_sirasi
-  else:
-    return f"{aktif_ders_sirasi}. Ders: Boş / Ders Yok", aktif_ders_sirasi
-
-
 @app.route("/kat1")
+@login_required
 def kat1():
   db = get_db()
   sol_liste = [
@@ -501,6 +610,7 @@ def kat1():
 
 
 @app.route("/kat2")
+@login_required
 def kat2():
   db = get_db()
   sol_liste = [
@@ -518,7 +628,121 @@ def kat2():
   )
 
 
+@app.route("/mezunlar", methods=["GET", "POST"])
+@login_required
+def mezunlar():
+  db = get_db()
+  secilen_yil = ""
+  aciklama_arama = ""
+  ad_arama = ""
+  sonuclar = []
+  liste_basligi = ""
+
+  if request.method == "POST":
+    if "aciklama_kaydet_id" in request.form:
+      mezun_id = request.form.get("aciklama_kaydet_id")
+      yeni_aciklama = request.form.get("aciklama_metni", "").strip()
+      db.execute(
+          "UPDATE mezunlar SET aciklama = ? WHERE id = ?",
+          (yeni_aciklama, mezun_id),
+      )
+      db.commit()
+      flash("Öğrenci açıklaması kaydedildi!", "success")
+
+      secilen_yil = request.form.get("aktif_yil", "")
+      aciklama_arama = request.form.get("aktif_aciklama_arama", "")
+      ad_arama = tr_buyuk(request.form.get("aktif_ad_arama", ""))
+
+      if aciklama_arama:
+        sonuclar = db.execute(
+            "SELECT * FROM mezunlar WHERE aciklama LIKE ? ORDER BY ad_soyad"
+            " ASC",
+            (f"%{aciklama_arama}%",),
+        ).fetchall()
+        liste_basligi = f"Açıklama Aramasına Göre Sonuçlar: '{aciklama_arama}'"
+      elif secilen_yil:
+        sonuclar = db.execute(
+            "SELECT * FROM mezunlar WHERE mezuniyet_yili = ? ORDER BY ad_soyad"
+            " ASC",
+            (secilen_yil,),
+        ).fetchall()
+        liste_basligi = f"{secilen_yil} Öğrencileri"
+      elif ad_arama:
+        aranan = tr_buyuk(ad_arama)
+        tum_kayitlar = db.execute(
+            "SELECT * FROM mezunlar ORDER BY mezuniyet_yili DESC, ad_soyad ASC"
+        ).fetchall()
+        sonuclar = [
+            r for r in tum_kayitlar if aranan in tr_buyuk(r["ad_soyad"])
+        ]
+        liste_basligi = f"İsim Aramasına Göre Sonuçlar: '{ad_arama}'"
+
+    elif "aciklama_ara_btn" in request.form:
+      aciklama_arama = request.form.get("aciklama_arama", "").strip()
+      if aciklama_arama:
+        sonuclar = db.execute(
+            "SELECT * FROM mezunlar WHERE aciklama LIKE ? ORDER BY"
+            " mezuniyet_yili DESC, ad_soyad ASC",
+            (f"%{aciklama_arama}%",),
+        ).fetchall()
+        liste_basligi = f"Açıklama Aramasına Göre Sonuçlar: '{aciklama_arama}'"
+      else:
+        flash("Lütfen açıklamaya göre arama yapmak için metin girin!", "warning")
+
+    elif "yil_sec_btn" in request.form:
+      secilen_yil = request.form.get("mezun_yili", "").strip()
+      if secilen_yil:
+        sonuclar = db.execute(
+            "SELECT * FROM mezunlar WHERE mezuniyet_yili = ? ORDER BY ad_soyad"
+            " ASC",
+            (secilen_yil,),
+        ).fetchall()
+        liste_basligi = f"{secilen_yil} Öğrencileri"
+      else:
+        flash("Lütfen bir mezuniyet yılı seçin!", "warning")
+
+    elif "ad_ara_btn" in request.form:
+      ad_arama = tr_buyuk(request.form.get("ad_soyad_arama", "").strip())
+      if ad_arama:
+        aranan = tr_buyuk(ad_arama)
+        tum_kayitlar = db.execute(
+            "SELECT * FROM mezunlar ORDER BY mezuniyet_yili DESC, ad_soyad ASC"
+        ).fetchall()
+        sonuclar = [
+            r for r in tum_kayitlar if aranan in tr_buyuk(r["ad_soyad"])
+        ]
+        liste_basligi = f"Ad / Soyad Aramasına Göre Sonuçlar: '{ad_arama}'"
+      else:
+        flash("Lütfen öğrenci adı veya soyadı girin!", "warning")
+
+  return render_template(
+      "mezunlar.html",
+      mezun_yillari=MEZUN_YILLARI,
+      secilen_yil=secilen_yil,
+      aciklama_arama=aciklama_arama,
+      ad_arama=ad_arama,
+      sonuclar=sonuclar,
+      liste_basligi=liste_basligi,
+  )
+
+
+@app.route("/api/mezun-ara")
+@login_required
+def api_mezun_ara():
+  q = request.args.get("q", "").strip()
+  if not q:
+    return jsonify([])
+  aranan = tr_buyuk(q)
+  db = get_db()
+  rows = db.execute("SELECT * FROM mezunlar ORDER BY ad_soyad ASC").fetchall()
+  eslesenler = [dict(r) for r in rows if aranan in tr_buyuk(r["ad_soyad"])][
+      :15
+  ]
+  return jsonify(eslesenler)
+
+
 @app.route("/ders_programi_yukle", methods=["GET", "POST"])
+@login_required
 def ders_programi_yukle():
   db = get_db()
 
@@ -593,6 +817,7 @@ def ders_programi_yukle():
 
 
 @app.route("/ders_saatleri", methods=["GET", "POST"])
+@login_required
 def ders_saatleri():
   db = get_db()
   if request.method == "POST":
@@ -617,6 +842,7 @@ def ders_saatleri():
 
 
 @app.route("/ayarlar", methods=["GET", "POST"])
+@login_required
 def ayarlar():
   global ogretmen_listesi, sinif_listesi, sinif_isimleri
 
@@ -641,8 +867,103 @@ def ayarlar():
         flash("Lütfen geçerli bir Sınıf PDF dosyası seçin!", "danger")
       return redirect(url_for("ayarlar"))
 
+    if "pansiyon_pdf_dosyasi" in request.files:
+      file = request.files["pansiyon_pdf_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "pansiyon_nobet.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_pansiyon.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Pansiyon nöbet listesi güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
+    if "nobetci_ogretmen_dosyasi" in request.files:
+      file = request.files["nobetci_ogretmen_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "nobetci_ogretmen.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_nobet.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Nöbetçi öğretmen listesi güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
+    if "rehber_ogretmen_dosyasi" in request.files:
+      file = request.files["rehber_ogretmen_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "rehber_ogretmenler.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_rehber.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Sınıf rehber öğretmenleri listesi güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
+    if "klup_ogretmen_dosyasi" in request.files:
+      file = request.files["klup_ogretmen_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "klup_ogretmenleri.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_klup.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Kulüp öğretmenleri listesi güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
+    if "sinav_programi_dosyasi" in request.files:
+      file = request.files["sinav_programi_dosyasi"]
+      if file and file.filename != "":
+        uzanti = file.filename.lower().rsplit(".", 1)[-1]
+        hedef_resim_yolu = os.path.join("static", "sinav_programi.png")
+        if uzanti == "pdf":
+          temp_pdf = os.path.join("static", "temp_sinav.pdf")
+          file.save(temp_pdf)
+          doc = fitz.open(temp_pdf)
+          if len(doc) > 0:
+            doc[0].get_pixmap(dpi=150).save(hedef_resim_yolu)
+          doc.close()
+          if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        elif uzanti in ["jpg", "jpeg", "png"]:
+          file.save(hedef_resim_yolu)
+        flash("Sınav programı güncellendi!", "success")
+      return redirect(url_for("ayarlar"))
+
   return render_template("ayarlar.html")
 
 
 if __name__ == "__main__":
-  app.run(debug=False, use_reloader=False)
+  app.run(debug=True, use_reloader=False)
