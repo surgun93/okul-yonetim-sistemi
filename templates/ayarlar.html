@@ -19,10 +19,21 @@
 </head>
 <body>
     <div class="container">
+        <style>
+    .session-bar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 14px; }
+    .session-user { background: #e9ecef; color: #333; padding: 6px 12px; border-radius: 20px; font-weight: bold; }
+    .btn-logout { background-color: #dc3545; color: white; text-decoration: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; font-size: 13px; }
+    .btn-logout:hover { background-color: #b02a37; }
+</style>
+
+<div class="session-bar">
+    <span class="session-user">👤 {{ aktif_kullanici }}</span>
+    <a href="{{ url_for('logout') }}" class="btn-logout">Oturumu Kapat</a>
+</div>
         <a href="{{ url_for('index') }}" class="back-btn">← Ana Sayfaya Dön</a>
         <h1>Sistem Ayarları ve Dosya Yükleme Paneli</h1>
 
-        <!-- Flaş Mesajlar (Blok kapanışları düzeltildi) -->
+        <!-- Flaş Mesajlar -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
