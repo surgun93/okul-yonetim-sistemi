@@ -8,20 +8,20 @@
         .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #333; margin-bottom: 25px; font-size: 26px; }
         
-        /* Üst Sekme Menüsü (Boyutlar Büyütüldü) */
-        .top-nav { display: flex; justify-content: center; gap: 20px; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 20px; }
+        /* Üst Sekme Menüsü */
+        .top-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; border-bottom: 2px solid #ddd; padding-bottom: 12px; margin-bottom: 20px; }
         .top-nav a, .top-nav span { padding: 10px 20px; text-decoration: none; color: #007bff; font-weight: bold; font-size: 16px; border-radius: 6px 6px 0 0; }
         .top-nav a:hover { background-color: #e9ecef; }
         .top-nav .active { background-color: #fff; border: 1px solid #ddd; border-bottom: 2px solid #fff; color: #333; margin-bottom: -14px; font-size: 17px; }
 
-        /* Alt Özel Butonlar (Boyutlar ve Yazılar Büyütüldü) */
+        /* Alt Özel Butonlar */
         .sub-menu { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 6px; }
         .sub-menu form { display: inline-block; }
         .sub-menu button { padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; }
         .sub-menu button:hover { opacity: 0.9; }
 
-        /* Arama Alanları (Yazı ve Input Boyutları Büyütüldü) */
-        .search-section { display: flex; justify-content: space-around; margin-bottom: 25px; background: #e9ecef; padding: 20px; border-radius: 6px; }
+        /* Arama Alanları */
+        .search-section { display: flex; justify-content: space-around; margin-bottom: 25px; background: #e9ecef; padding: 20px; border-radius: 6px; flex-wrap: wrap; gap: 15px; }
         .search-box { display: flex; gap: 10px; align-items: center; }
         .search-box input[type="text"] { padding: 10px 14px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; width: 220px; }
         .search-box button { padding: 10px 16px; font-size: 15px; font-weight: bold; background-color: #343a40; color: white; border: none; border-radius: 4px; cursor: pointer; }
@@ -35,6 +35,17 @@
 </head>
 <body>
     <div class="container">
+<style>
+    .session-bar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 14px; }
+    .session-user { background: #e9ecef; color: #333; padding: 6px 12px; border-radius: 20px; font-weight: bold; }
+    .btn-logout { background-color: #dc3545; color: white; text-decoration: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; font-size: 13px; }
+    .btn-logout:hover { background-color: #b02a37; }
+</style>
+
+<div class="session-bar">
+    <span class="session-user">👤 {{ aktif_kullanici }}</span>
+    <a href="{{ url_for('logout') }}" class="btn-logout">Oturumu Kapat</a>
+</div>
         <h1>Çamaş Türk Telekom Çok Programlı Anadolu Lisesi</h1>
         
         <!-- Flaş Mesajlar -->
@@ -48,14 +59,14 @@
 
         <!-- Üst Sekme Menüsü -->
         <div class="top-nav">
-    <a href="{{ url_for('index') }}" class="active">Ana Sayfa</a>
-    <a href="{{ url_for('kat1') }}">1. Kat</a>
-    <a href="{{ url_for('kat2') }}">2. Kat</a>
-    <a href="{{ url_for('ders_saatleri') }}">Ders Saatleri</a>
-    <a href="{{ url_for('ayarlar') }}">Ayarlar (Dosya Yükle)</a>
-    <a href="{{ url_for('ders_programi_yukle') }}">Ders Programı Yükle</a>
-
-</div>
+            <a href="{{ url_for('index') }}" class="active">Ana Sayfa</a>
+            <a href="{{ url_for('kat1') }}" >1. Kat</a>
+            <a href="{{ url_for('kat2') }}">2. Kat</a>
+            <a href="{{ url_for('mezunlar') }}">Mezunlar</a>
+            <a href="{{ url_for('ders_saatleri') }}">Ders Saatleri</a>
+            <a href="{{ url_for('ayarlar') }}">Ayarlar (Dosya Yükle)</a>
+            <a href="{{ url_for('ders_programi_yukle') }}">Ders Programı Yükle</a>
+        </div>
 
         <!-- Alt Özel Butonlar -->
         <div class="sub-menu">
@@ -125,4 +136,3 @@
     </div>
 </body>
 </html>
-
