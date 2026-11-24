@@ -3,10 +3,14 @@ from functools import wraps
 import os
 import sqlite3
 from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
-import fitz  # PyMuPDF kütüphanesi
+import pymupdf as fitz  # PyMuPDF kütüphanesi
 from werkzeug.security import check_password_hash, generate_password_hash
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = "/var/data" if os.path.exists("/var/data") else BASE_DIR
+DATABASE = os.path.join(DATA_DIR, "sinif.db")
+
+app = Flask(__name__, root_path=BASE_DIR)
 app.secret_key = os.environ.get(
     "FLASK_SECRET_KEY", "ordu_karsiyaka_mahallesi52"
 )
@@ -16,9 +20,6 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Tek kullanıcı kimlik bilgileri (parola hashlenerek saklanır)
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD_HASH = generate_password_hash("dolunay_serinsok52")
-
-# Veritabanı dosyası
-DATABASE = "sinif.db"
 
 MEZUN_YILLARI = [
     "2018/2019 Mezun",
@@ -48,6 +49,7 @@ def close_connection(exception):
 
 
 def init_db():
+  os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
   with app.app_context():
     db = get_db()
     db.execute("""
@@ -88,12 +90,13 @@ def init_db():
 
 init_db()
 
-OGRETMEN_PDF = os.path.join("static", "ogretmen_programi.pdf")
-SINIF_PDF = os.path.join("static", "sinif_programi.pdf")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+OGRETMEN_PDF = os.path.join(STATIC_DIR, "ogretmen_programi.pdf")
+SINIF_PDF = os.path.join(STATIC_DIR, "sinif_programi.pdf")
 
-OGRETMEN_KLASORU = "static/ogretmenler"
-SINIF_KLASORU = "static/siniflar"
-MEZUN_FOTOLAR_KLASORU = "static/mezun_fotolari"
+OGRETMEN_KLASORU = os.path.join(STATIC_DIR, "ogretmenler")
+SINIF_KLASORU = os.path.join(STATIC_DIR, "siniflar")
+MEZUN_FOTOLAR_KLASORU = os.path.join(STATIC_DIR, "mezun_fotolari")
 
 os.makedirs(OGRETMEN_KLASORU, exist_ok=True)
 os.makedirs(SINIF_KLASORU, exist_ok=True)
@@ -484,70 +487,70 @@ def index():
     calisma_takvimi1_tiklandi = request.form.get("calisma_takvimi1_goster")
 
     if pansiyon_tiklandi is not None:
-      pansiyon_yolu = os.path.join("static", "pansiyon_nobet.png")
+      pansiyon_yolu = os.path.join(STATIC_DIR, "pansiyon_nobet.png")
       if os.path.exists(pansiyon_yolu):
         secilen_resim = "pansiyon_nobet.png"
       else:
         flash("Henüz pansiyon nöbet listesi yüklenmemiş!", "warning")
 
     elif nobetci_tiklandi is not None:
-      nobetci_yolu = os.path.join("static", "nobetci_ogretmen.png")
+      nobetci_yolu = os.path.join(STATIC_DIR, "nobetci_ogretmen.png")
       if os.path.exists(nobetci_yolu):
         secilen_resim = "nobetci_ogretmen.png"
       else:
         flash("Henüz nöbetçi öğretmen listesi yüklenmemiş!", "warning")
 
     elif rehber_tiklandi is not None:
-      rehber_yolu = os.path.join("static", "rehber_ogretmenler.png")
+      rehber_yolu = os.path.join(STATIC_DIR, "rehber_ogretmenler.png")
       if os.path.exists(rehber_yolu):
         secilen_resim = "rehber_ogretmenler.png"
       else:
         flash("Henüz sınıf rehber öğretmenleri listesi yüklenmemiş!", "warning")
 
     elif klup_tiklandi is not None:
-      klup_yolu = os.path.join("static", "klup_ogretmenleri.png")
+      klup_yolu = os.path.join(STATIC_DIR, "klup_ogretmenleri.png")
       if os.path.exists(klup_yolu):
         secilen_resim = "klup_ogretmenleri.png"
       else:
         flash("Henüz kulüp öğretmenleri listesi yüklenmemiş!", "warning")
 
     elif sinav_tiklandi is not None:
-      sinav_yolu = os.path.join("static", "sinav_programi.png")
+      sinav_yolu = os.path.join(STATIC_DIR, "sinav_programi.png")
       if os.path.exists(sinav_yolu):
         secilen_resim = "sinav_programi.png"
       else:
         flash("Henüz sınav programı yüklenmemiş!", "warning")
 
     elif blok_tiklandi is not None:
-      blok_yolu = os.path.join("static", "blok_saatler.png")
+      blok_yolu = os.path.join(STATIC_DIR, "blok_saatler.png")
       if os.path.exists(blok_yolu):
         secilen_resim = "blok_saatler.png"
       else:
         flash("Henüz blok saatler listesi yüklenmemiş!", "warning")
 
     elif imamhatip_tiklandi is not None:
-      imamhatip_yolu = os.path.join("static", "imamhatip_saatler.png")
+      imamhatip_yolu = os.path.join(STATIC_DIR, "imamhatip_saatler.png")
       if os.path.exists(imamhatip_yolu):
         secilen_resim = "imamhatip_saatler.png"
       else:
         flash("Henüz imamhatip saatler listesi yüklenmemiş!", "warning")
 
     elif ogrenci_sayilari_tiklandi is not None:
-      ogrenci_yolu = os.path.join("static", "ogrenci_sayilari.png")
+      ogrenci_yolu = os.path.join(STATIC_DIR, "ogrenci_sayilari.png")
       if os.path.exists(ogrenci_yolu):
         secilen_resim = "ogrenci_sayilari.png"
       else:
         flash("Henüz öğrenci sayıları listesi yüklenmemiş!", "warning")
 
     elif calisma_takvimi_tiklandi is not None:
-      takvim_yolu = os.path.join("static", "calisma_takvimi.png")
+      takvim_yolu = os.path.join(STATIC_DIR, "calisma_takvimi.png")
       if os.path.exists(takvim_yolu):
         secilen_resim = "calisma_takvimi.png"
       else:
         flash("Henüz çalışma takvimi yüklenmemiş!", "warning")
 
     elif calisma_takvimi1_tiklandi is not None:
-      takvim1_yolu = os.path.join("static", "calisma_takvimi1.png")
+      takvim1_yolu = os.path.join(STATIC_DIR, "calisma_takvimi1.png")
       if os.path.exists(takvim1_yolu):
         secilen_resim = "calisma_takvimi1.png"
       else:
@@ -871,9 +874,9 @@ def ayarlar():
       file = request.files["pansiyon_pdf_dosyasi"]
       if file and file.filename != "":
         uzanti = file.filename.lower().rsplit(".", 1)[-1]
-        hedef_resim_yolu = os.path.join("static", "pansiyon_nobet.png")
+        hedef_resim_yolu = os.path.join(STATIC_DIR, "pansiyon_nobet.png")
         if uzanti == "pdf":
-          temp_pdf = os.path.join("static", "temp_pansiyon.pdf")
+          temp_pdf = os.path.join(STATIC_DIR, "temp_pansiyon.pdf")
           file.save(temp_pdf)
           doc = fitz.open(temp_pdf)
           if len(doc) > 0:
@@ -890,9 +893,9 @@ def ayarlar():
       file = request.files["nobetci_ogretmen_dosyasi"]
       if file and file.filename != "":
         uzanti = file.filename.lower().rsplit(".", 1)[-1]
-        hedef_resim_yolu = os.path.join("static", "nobetci_ogretmen.png")
+        hedef_resim_yolu = os.path.join(STATIC_DIR, "nobetci_ogretmen.png")
         if uzanti == "pdf":
-          temp_pdf = os.path.join("static", "temp_nobet.pdf")
+          temp_pdf = os.path.join(STATIC_DIR, "temp_nobet.pdf")
           file.save(temp_pdf)
           doc = fitz.open(temp_pdf)
           if len(doc) > 0:
@@ -909,9 +912,9 @@ def ayarlar():
       file = request.files["rehber_ogretmen_dosyasi"]
       if file and file.filename != "":
         uzanti = file.filename.lower().rsplit(".", 1)[-1]
-        hedef_resim_yolu = os.path.join("static", "rehber_ogretmenler.png")
+        hedef_resim_yolu = os.path.join(STATIC_DIR, "rehber_ogretmenler.png")
         if uzanti == "pdf":
-          temp_pdf = os.path.join("static", "temp_rehber.pdf")
+          temp_pdf = os.path.join(STATIC_DIR, "temp_rehber.pdf")
           file.save(temp_pdf)
           doc = fitz.open(temp_pdf)
           if len(doc) > 0:
@@ -928,9 +931,9 @@ def ayarlar():
       file = request.files["klup_ogretmen_dosyasi"]
       if file and file.filename != "":
         uzanti = file.filename.lower().rsplit(".", 1)[-1]
-        hedef_resim_yolu = os.path.join("static", "klup_ogretmenleri.png")
+        hedef_resim_yolu = os.path.join(STATIC_DIR, "klup_ogretmenleri.png")
         if uzanti == "pdf":
-          temp_pdf = os.path.join("static", "temp_klup.pdf")
+          temp_pdf = os.path.join(STATIC_DIR, "temp_klup.pdf")
           file.save(temp_pdf)
           doc = fitz.open(temp_pdf)
           if len(doc) > 0:
@@ -947,9 +950,9 @@ def ayarlar():
       file = request.files["sinav_programi_dosyasi"]
       if file and file.filename != "":
         uzanti = file.filename.lower().rsplit(".", 1)[-1]
-        hedef_resim_yolu = os.path.join("static", "sinav_programi.png")
+        hedef_resim_yolu = os.path.join(STATIC_DIR, "sinav_programi.png")
         if uzanti == "pdf":
-          temp_pdf = os.path.join("static", "temp_sinav.pdf")
+          temp_pdf = os.path.join(STATIC_DIR, "temp_sinav.pdf")
           file.save(temp_pdf)
           doc = fitz.open(temp_pdf)
           if len(doc) > 0:
